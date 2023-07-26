@@ -1,13 +1,13 @@
 # Ambient Relay Service
 
-This is an alternative frontend for [Ambient Finance](https://ambient.finance) that has a gasless transaction relayer. It allows users to execute DEX commands without needing gas on their address if they have enough tokens on their DEX balance.
+This is an alternative frontend for [Ambient Finance](https://ambient.finance) that has a gasless transaction relayer. It allows users to execute DEX commands without needing gas on their address if they have enough tokens on their DEX balance to cover the gas.
 
 ## Features
 * Supports balance withdrawal/transfer, LP removal, // TODO: limit order removal, ERC721 deposits, swaps
 * Different ways of command execution:
     * Fully relayed mode – if you don't have any ETH on any address, but have enough DEX balance to pay a tip to the relayer
-    * Manually relayed mode – if you have a ETH on a different address but don't want to (or can't) send it to the address in question
-    * Manual mode – regular transactions like the official frontend sends
+    * Manually relayed mode – if you have a ETH on a different address, but don't want to (or can't) send it to the address in question
+    * Manual mode – regular transactions like the official frontend would send
 * Tips are based on gas estimates of the transaction and can be paid with any token that the relayer permits
 * Tip value is verified based on onchain price against ETH
 

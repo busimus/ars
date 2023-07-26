@@ -35,7 +35,7 @@
                 shortHash(hash)
               }}</a>
             </div>
-            <a href="#" style="flex: 1; padding-bottom: 0.5rem; color: inherit;" @click="removeWaitingHash(hash)">
+            <a href="#" style="flex: 1; padding-bottom: 0.5rem; color: inherit;" @click.prevent="removeWaitingHash(hash)">
               <b-icon-x />
             </a>
           </div>
@@ -44,7 +44,8 @@
         <hr style="margin-top: 0.5rem" />
         <div v-if="address && chainId">
           <ExchangePositions :balances="balances" :positions="positions" :pools="pools" :refreshing="refreshing"
-            @refresh="refreshData" @withdraw="setWithdrawTarget" @removeLp="setRemoveLp" />
+            @refresh="refreshData" @withdraw="(a) => setWithdrawTarget(a, true)"
+            @transfer="(a) => setWithdrawTarget(a, false)" @removeLp="setRemoveLp" />
         </div>
         <div class="text-center" v-else>
           Connect wallet to see positions and balances
@@ -53,7 +54,7 @@
         <ActionInput ref="actionInput" @perform="performAction" :pools="pools" :tokens="TOKENS[chainId]"
           :address="address" :signing="signing" :canSign="canSign" />
       </div>
-      <div v-if="Object.keys(signed.options).length > 0" id="signed-cmds-panel"
+      <div ref="signedCmdsPanel" v-if="Object.keys(signed.options).length > 0" id="signed-cmds-panel"
         class="main-panel border shadow-sm rounded">
         <h4 class="text-center">Signed commands</h4>
         <b-form-group id="input-group-relayer" label="Signed command" label-for="input-selected-scmd">
@@ -78,7 +79,7 @@
                   <b-form-select id="input-tip-token" v-model="scmd._action._selectedTipToken"
                     :options="scmd._action._tipEstimates" value-field="token" required></b-form-select>
                 </div>
-                <b-button variant="dark" @click="estimateTips(scmd)" style="flex: 1">
+                <b-button variant="dark" @click="estimateTips(scmd)" style="flex: 1" title="Estimate gas cost">
                   <span v-if="scmd._action._gasPrice && !estimating">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
                       viewBox="0 0 16 16">
@@ -106,7 +107,7 @@
             <b-tooltip target="relayManuallyQuestion" triggers="hover">
               Send the TX from the connected address.<br /> Could be any address, as long as it has ETH for gas.
             </b-tooltip>
-            <b-button :variant="relaying ? 'outline-success' : 'success'" size="lg" style="width: 100%" type=submit
+            <b-button ref="relayButton" :variant="relaying ? 'outline-success' : 'success'" size="lg" style="width: 100%" type=submit
               :disabled="relayButtonDisabled(scmd)">
               <div v-if="relaying" class="load-spinner spinner-border spinner-border-md" role="status">
                 <span class="sr-only">{{ scmd._action._relayManually ? 'Sending...' : 'Relaying...' }}</span>
@@ -239,8 +240,7 @@ export default {
       chain: undefined,
       graphcache: gc,
       positions: {},
-      balances: {
-      },
+      balances: {},
       pools: {},
       signed: {
         selected: null,
@@ -275,25 +275,30 @@ export default {
         this.resetData()
       }
     },
-    setWithdrawTarget: function (tokenAddr) {
-      const action = { ...COMMANDS.withdraw }
+    setWithdrawTarget: function (tokenAddr, withdraw) {
+      let action = cloneDeep({ ...COMMANDS.withdraw })
+      if (!withdraw)
+        action = cloneDeep({ ...COMMANDS.transfer })
       action.token = tokenAddr
       action.qty = this.balances[tokenAddr].balanceHuman
       action._qtyRaw = this.balances[tokenAddr].balance
       action._qtyDecimals = this.balances[tokenAddr].decimals
       console.log('setting action', action)
       this.$refs.actionInput.setAction(action)
+      this.$nextTick(() => {
+        this.$refs.actionInput.$el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
     },
     setRemoveLp: function (positionId) {
       console.log('setRemoveLp', positionId)
       const pos = this.positions[positionId]
       let action = null
       if (pos.positionType == 'concentrated') {
-        action = { ...COMMANDS.removeConcLp }
+        action = cloneDeep({ ...COMMANDS.removeConcLp })
         action.qty = pos.concLiq
         //action.qty = BigInt(pos.concLiq)
       } else {
-        action = { ...COMMANDS.removeAmbLp }
+        action = cloneDeep({ ...COMMANDS.removeAmbLp })
         action.qty = pos.ambientLiq
         //action.qty = BigInt(pos.ambientLiq)
       }
@@ -306,11 +311,14 @@ export default {
       action._quoteDecimals = pos._quoteDecimals
       console.log('setting action', action)
       this.$refs.actionInput.setAction(action)
+      this.$nextTick(() => {
+        this.$refs.actionInput.$el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
     },
     performAction: async function (actionInput) {
       console.log('performing', actionInput)
       this.signing = true;
-      const action = { ...actionInput }
+      const action = cloneDeep({ ...actionInput })
       let cmd = null
       try {
         if (action._type == 'withdraw') {
@@ -334,6 +342,7 @@ export default {
           if (signedCmd) {
             this.signed.options.push(signedCmd)
             this.signed.selected = signedCmd.sig
+            this.$nextTick(() => this.$refs.signedCmdsPanel.scrollIntoView({ behavior: 'smooth', block: 'end' }))
           }
         }
       } catch (e) {
@@ -389,7 +398,7 @@ export default {
       )
       return { callpath, cmd, _action: action }
     },
-    buildWithdrawSurplusCmd: function (action, withdraw = false) {
+    buildWithdrawSurplusCmd: function (action, withdraw = true) {
       const callpath = CROC_CHAINS[this.chainId].withdrawCallpath
       const cmd = encodeAbiParameters(
         [
@@ -938,14 +947,14 @@ export default {
         await this.refreshData()
       }
     },
-    waitForTx: async function(args) {
+    waitForTx: async function (args) {
       const client = getPublicClient()
       const sleep = (delay) => new Promise((resolve) => setTimeout(resolve, delay))
       const start = Date.now()
       while (true) {
         await sleep(args.pollingInterval)
         try {
-          const tx = await client.getTransaction({hash: args.hash})
+          const tx = await client.getTransaction({ hash: args.hash })
           console.log(tx)
           if (tx.blockHash)
             break
@@ -1022,7 +1031,7 @@ export default {
     watchAccount((account) => this.accountChanged(account))
     watchNetwork((network) => this.networkChanged(network))
     if (this.refreshTicker == null)
-      this.refreshTicker = setInterval(() => this.refreshData(), 30000);
+      this.refreshTicker = setInterval(async () => await this.refreshData(), 30000);
   },
   unmounted: function () {
     if (this.refreshTicker) {

@@ -13,7 +13,7 @@
           <div style="display: flex; gap: 0.4rem">
             <b-form-input id="input-withdraw-recv" v-model="action.recv" placeholder="Address"
               :state="addressValid(action.recv)" required></b-form-input>
-            <b-button variant="light" @click="setRecvToSelf"><b-icon-wallet-2 /></b-button>
+            <b-button variant="light" @click="setRecvToSelf" title="Use currently connected address"><b-icon-wallet-2 /></b-button>
           </div>
         </b-form-group>
 

@@ -12,7 +12,7 @@
         Exchange balances
       </h4>
       <button id="i-header-dropdown" class="btn btn-light" style="flex: 1; margin-bottom: 0.5rem; border: 0px"
-        @click="$emit('refresh')">
+        @click="$emit('refresh')" title="Refresh DEX data">
         <b-icon-arrow-clockwise :class="{ 'icon-spin': refreshing > 0 }" />
       </button>
     </div>
@@ -31,8 +31,11 @@
         <td class="text-truncate" style="max-width: 0; padding-right: 0.4rem;">{{ addr }}</td>
         <td>{{ humanAmount(token.balanceHuman) }}</td>
         <td>
-          <a v-if="token.balance > 0" @click="$emit('withdraw', addr)" href="#">
+          <a v-if="token.balance > 0" @click.prevent="$emit('withdraw', addr)" href="#" title="Withdraw">
             <b-icon-arrow-bar-up />
+          </a>
+          <a v-if="token.balance > 0" @click.prevent="$emit('transfer', addr)" href="#" style="margin-left: 0.5rem" title="Transfer">
+            <small><b-icon-arrow-90deg-right /></small>
           </a>
         </td>
       </tr>
@@ -52,7 +55,7 @@
         <td>{{ pos.baseSymbol }}<br /> {{ pos.quoteSymbol }}</td>
         <td>{{ baseLpHumanAmount(pos) }}<br /> {{ quoteLpHumanAmount(pos) }}</td>
         <td>
-          <a @click="$emit('removeLp', posId)" href="#">
+          <a @click.prevent="$emit('removeLp', posId)" href="#" title="Remove">
             <b-icon-arrow-bar-up />
           </a>
         </td>
@@ -68,6 +71,7 @@ import {
   BIconQuestionCircle,
   BIconArrowClockwise,
   BIconArrowBarUp,
+  BIconArrow90degRight,
   BCollapse,
   BTooltip,
 } from "bootstrap-vue";
@@ -84,6 +88,7 @@ export default {
     BIconQuestionCircle,
     BIconArrowClockwise,
     BIconArrowBarUp,
+    BIconArrow90degRight,
     BCollapse,
     BTooltip,
   },
