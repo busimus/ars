@@ -1,0 +1,151 @@
+<template>
+  <div id="exchangePositions">
+    <div style="
+       display: flex;
+       align-items: center;
+       justify-content: space-between;
+     ">
+      <button id="header-dropdown" style="flex: 1; visibility: hidden">
+        <b-icon-arrow-clockwise />
+      </button>
+      <h4 style="flex: 60" class="text-center">
+        Exchange balances
+      </h4>
+      <button id="i-header-dropdown" class="btn btn-light" style="flex: 1; margin-bottom: 0.5rem; border: 0px"
+        @click="$emit('refresh')">
+        <b-icon-arrow-clockwise :class="{ 'icon-spin': refreshing > 0 }" />
+      </button>
+    </div>
+    <div v-if="balances.length == 0" class="refresh-spinner spinner-border spinner-border"></div>
+    <table id="tokenTable" v-else>
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th scope="col">Address</th>
+          <th scope="col">Balance</th>
+          <th scope="col"></th>
+        </tr>
+      </thead>
+      <tr v-for="(token, addr) in balances">
+        <td>{{ token.symbol }}</td>
+        <td class="text-truncate" style="max-width: 0; padding-right: 0.4rem;">{{ addr }}</td>
+        <td>{{ humanAmount(token.balanceHuman) }}</td>
+        <td>
+          <a v-if="token.balance > 0" @click="$emit('withdraw', addr)" href="#">
+            <b-icon-arrow-bar-up />
+          </a>
+        </td>
+      </tr>
+    </table>
+    <br />
+    <h4 class="text-center">
+      Liquidity positions
+    </h4>
+    <table id="positionTable">
+      <thead>
+        <tr>
+          <th>Pair</th>
+          <th>Amounts</th>
+        </tr>
+      </thead>
+      <tr v-for="(pos, posId) in positions">
+        <td>{{ pos.baseSymbol }}<br /> {{ pos.quoteSymbol }}</td>
+        <td>{{ baseLpHumanAmount(pos) }}<br /> {{ quoteLpHumanAmount(pos) }}</td>
+        <td>
+          <a @click="$emit('removeLp', posId)" href="#">
+            <b-icon-arrow-bar-up />
+          </a>
+        </td>
+      </tr>
+    </table>
+  </div>
+</template>
+
+<script>
+import {
+  BFormInput,
+  BFormInvalidFeedback,
+  BIconQuestionCircle,
+  BIconArrowClockwise,
+  BIconArrowBarUp,
+  BCollapse,
+  BTooltip,
+} from "bootstrap-vue";
+
+import { ethers } from "ethers";
+import { getFormattedNumber } from "../number_formatting.jsx"
+import { lpBaseTokens, lpQuoteTokens, poolKey } from '../utils.jsx'
+
+export default {
+  name: "ExchangePositions",
+  components: {
+    BFormInput,
+    BFormInvalidFeedback,
+    BIconQuestionCircle,
+    BIconArrowClockwise,
+    BIconArrowBarUp,
+    BCollapse,
+    BTooltip,
+  },
+  data: function () {
+    return {
+    };
+  },
+  props: {
+    balances: Object,
+    positions: Object,
+    pools: Object,
+    refreshing: Number,
+  },
+  methods: {
+    humanAmount: function (amount) {
+      return getFormattedNumber(parseFloat(amount))
+    },
+    baseLpHumanAmount: function (pos) {
+      const pool = this.pools[poolKey(pos)]
+      if (!pool)
+        return this.humanAmount(NaN)
+      return lpBaseTokens(pos, pool, 100, true)
+    },
+    quoteLpHumanAmount: function (pos) {
+      const pool = this.pools[poolKey(pos)]
+      if (!pool)
+        return this.humanAmount(NaN)
+      return lpQuoteTokens(pos, pool, 100, true)
+    },
+  },
+  computed: {
+  },
+  mounted: function () {
+  },
+  watch: {
+  }
+};
+
+</script>
+
+<style scoped>
+#tokenTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#positionTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+td {
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
+}
+
+#tokenTable tr {
+  border-bottom: 1px solid #e5e5e5;
+}
+
+#positionTable tr {
+  border-bottom: 1px solid #e5e5e5;
+}
+</style>
+
