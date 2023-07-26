@@ -3,7 +3,7 @@
     <!-- buncha dumb bullshit needed to get prop updating to work here -->
     <b-form-input :id="'input-' + name" :value="address" @input="$emit('update:address', $event)" :placeholder="placeholder" :state="inputValid"
       required></b-form-input>
-    <small v-if="description && tokenString == null" class="form-text text-muted mb-2">{{ description }}</small>
+    <small v-if="description && tokenString == null" class="form-text text-muted">{{ description }}</small>
     <b-form-valid-feedback v-if="isToken && tokenValid" :id="'input-' + name + 'valid-feedback'">
       Token: {{ tokenString }}
     </b-form-valid-feedback>
@@ -85,7 +85,7 @@ export default {
         return "Unknown token!"
       } else if (token) {
         if (this.isToken != true)
-          return `This is a token address for ${token.symbol}!`
+          return `This is the token address for ${token.symbol}!`
         else
           return token.symbol
       }

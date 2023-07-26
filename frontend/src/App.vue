@@ -479,7 +479,7 @@ export default {
         return signedCmd
       } catch (e) {
         console.error('signCmd exception', e)
-        this.showToast('Signing exception', e, 'danger', true)
+        this.showToast('Signing exception', e.toString(), 'danger')
         throw e
       }
     },
@@ -535,7 +535,7 @@ export default {
             this.ensureBalance(clonedScmd)
           } catch (e) {
             console.error('ensure error', e)
-            this.showToast("Tip error", e, "danger")
+            this.showToast("Tip error", e.toString(), "danger")
             throw e
           }
           const resignedCmd = await this.signCmd(clonedScmd)
@@ -622,7 +622,7 @@ export default {
           return null
         }
       } catch (e) {
-        this.showToast("Relay exception", e, "danger")
+        this.showToast("Relay exception", e.toString(), "danger")
         throw e
       }
       this.showToast("Relay success", 'Waiting for transaction to confirm', "success")
@@ -992,6 +992,7 @@ export default {
         solid: false,
         appendToast: true,
         variant: variant,
+        autoHideDelay: 5000,
         noAutoHide,
       });
     },
