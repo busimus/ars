@@ -952,6 +952,8 @@ export default {
       const sleep = (delay) => new Promise((resolve) => setTimeout(resolve, delay))
       const start = Date.now()
       while (true) {
+        if (Date.now() - start > args.timeout)
+          break
         await sleep(args.pollingInterval)
         try {
           const tx = await client.getTransaction({ hash: args.hash })
@@ -963,8 +965,6 @@ export default {
           continue
         }
 
-        if (Date.now() - start > args.timeout)
-          break
       }
     },
     removeTip: function (scmd) {
@@ -1005,6 +1005,10 @@ export default {
     },
     removeWaitingHash: function (hash) {
       this.$delete(this.waitingHashes, hash)
+      if (Object.keys(this.waitingHashes) == 0) {
+        this.relaying = false
+        this.signing = false
+      }
     },
   },
   watch: {
