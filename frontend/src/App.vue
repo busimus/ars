@@ -3,7 +3,6 @@
     <div id="main-ui-wrapper" style="padding-top: 0.5em; padding-bottom: 0.5em" class="container-fluid">
       <div id="main-ui" class="main-panel border shadow-sm rounded">
         <img id="logo" alt="Ambient Relay Service" src="./assets/ars_logo.svg" style="margin-bottom: 0.7rem" />
-        <!-- <hr style="margin-top: 1rem; margin-bottom: 0.5rem" /> -->
         <a href="#collapseIndicatorChevronDark" v-b-toggle.collapse-about @click.prevent class="text-center"
           style="display: block;  margin-bottom: 0.5rem;" data-bs-toggle="collapse" aria-expanded="false"
           aria-controls="collapseIndicatorChevronDark">
@@ -107,8 +106,8 @@
             <b-tooltip target="relayManuallyQuestion" triggers="hover">
               Send the TX from the connected address.<br /> Could be any address, as long as it has ETH for gas.
             </b-tooltip>
-            <b-button ref="relayButton" :variant="relaying ? 'outline-success' : 'success'" size="lg" style="width: 100%" type=submit
-              :disabled="relayButtonDisabled(scmd)">
+            <b-button ref="relayButton" :variant="relaying ? 'outline-success' : 'success'" size="lg" style="width: 100%"
+              type=submit :disabled="relayButtonDisabled(scmd)">
               <div v-if="relaying" class="load-spinner spinner-border spinner-border-md" role="status">
                 <span class="sr-only">{{ scmd._action._relayManually ? 'Sending...' : 'Relaying...' }}</span>
               </div>
@@ -208,6 +207,8 @@ const RELAYERS = {
 // approximate amount of gas that adding a tip costs (since it's not possible to estimate gas with a tip)
 const RELAYER_GAS_TIP_MARKUP = 15000n
 
+const REFRESH_PERIOD = 30000
+
 export default {
   name: "App",
   components: {
@@ -254,6 +255,8 @@ export default {
       estimating: false,
       refreshTicker: null,
       waitingHashes: {},
+      autoRefreshPaused: true,
+      lastRefresh: 0,
       RELAYERS,
       TOKENS,
     };
@@ -871,7 +874,7 @@ export default {
         // @TODO: remove for prod
         if (resp.tokens.indexOf(ZERO_ADDRESS) == -1)
           resp.tokens.unshift(ZERO_ADDRESS)
-        if (resp.tokens.indexOf("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") == -1)
+        if (this.chainId == 1 && resp.tokens.indexOf("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") == -1)
           resp.tokens.push("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
         const surpluses = await this.fetchSurpluses(owner, resp.tokens)
         console.log('surpluses', surpluses)
@@ -1010,6 +1013,9 @@ export default {
         this.signing = false
       }
     },
+    onVisibilityChange() {
+      this.autoRefreshPaused = document.hidden
+    }
   },
   watch: {
     address: function (address) {
@@ -1035,13 +1041,20 @@ export default {
     watchAccount((account) => this.accountChanged(account))
     watchNetwork((network) => this.networkChanged(network))
     if (this.refreshTicker == null)
-      this.refreshTicker = setInterval(async () => await this.refreshData(), 30000);
+      this.refreshTicker = setInterval(async () => {
+        if (Date.now() - this.lastRefresh < REFRESH_PERIOD || this.autoRefreshPaused)
+          return
+        await this.refreshData()
+        this.lastRefresh = Date.now()
+      }, 500);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
   },
   unmounted: function () {
     if (this.refreshTicker) {
       clearInterval(this.refreshTicker)
       this.refreshTicker = null;
     }
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
   },
 };
 </script>

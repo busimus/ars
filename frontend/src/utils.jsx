@@ -13,8 +13,7 @@ export function isHexString(value, length = null) {
 
 export function isValidAddress(hexAddress) {
   if (!isHexString(hexAddress)) {
-    const msg = `This method only supports 0x-prefixed hex strings but string was: ${hexAddress}`;
-    throw new Error(msg);
+    return false
   }
   return /^0x[0-9a-fA-F]{40}$/.test(hexAddress);
 }

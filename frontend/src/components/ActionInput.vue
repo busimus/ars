@@ -8,20 +8,19 @@
     <b-form v-if="actionType" @submit="perform">
       <br />
       <div v-if="actionType == 'withdraw'">
-        <b-form-group id="input-group-withdraw-recv" label="Recipient" label-for="input-withdraw-recv"
-          description="Where tokens will be sent" required>
-          <div style="display: flex; gap: 0.4rem">
-            <b-form-input id="input-withdraw-recv" v-model="action.recv" placeholder="Address"
-              :state="addressValid(action.recv)" required></b-form-input>
-            <b-button variant="light" @click="setRecvToSelf" title="Use currently connected address"><b-icon-wallet-2 /></b-button>
-          </div>
-        </b-form-group>
+        <!-- flex here makes the layout a little taller, awful -->
+        <div style="display: flex; gap: 0.4rem">
+          <!-- horrible prop binding because v-model:address doesn't work -->
+          <AddressInput :address="action.recv" @update:address="a => action.recv = a" :name="'withdraw-recv'"
+            :label="'Recipient'" :placeholder="'Address'" :description="'Where tokens will be sent'" :tokens="tokens" />
+          <!-- disgusting style, revolting -->
+          <b-button style="height: fit-content; margin-top: 1.6rem; padding-bottom: 0.4rem" variant="light"
+            @click="setRecvToSelf" title="Use currently connected address"><b-icon-wallet-2 /></b-button>
+        </div>
 
-        <b-form-group id="input-group-withdraw-token" label="Token contract" label-for="input-withdraw-token"
-          description="Token contract address">
-          <b-form-input id="input-withdraw-token" v-model="action.token" placeholder="Contract address"
-            :state="addressValid(action.token)" required></b-form-input>
-        </b-form-group>
+        <AddressInput :address="action.token" @update:address="a => action.token = a" :name="'withdraw-token'"
+          :label="'Token contract'" :placeholder="'Contract address'" :description="'Token contract address'"
+          :tokens="tokens" :isToken="true" />
 
         <div style="display: flex; gap: 0.4rem">
           <b-form-group id="input-group-withdraw-qty" label="Amount to withdraw" label-for="input-withdraw-qty">
@@ -36,17 +35,13 @@
         </div>
       </div>
       <div v-if="actionType == 'transfer'">
-        <b-form-group id="input-group-withdraw-recv" label="Recipient" label-for="input-withdraw-recv"
-          description="Where DEX balance will be sent" required>
-          <b-form-input id="input-withdraw-recv" v-model="action.recv" placeholder="Address"
-            :state="addressValid(action.recv)" required></b-form-input>
-        </b-form-group>
+        <AddressInput :address="action.recv" @update:address="a => action.recv = a" :name="'transfer-recv'"
+          :label="'Recipient'" :placeholder="'Address'" :description="'Where DEX balance will be sent'"
+          :tokens="tokens" />
 
-        <b-form-group id="input-group-withdraw-token" label="Token contract" label-for="input-withdraw-token"
-          description="Token contract address">
-          <b-form-input id="input-withdraw-token" v-model="action.token" placeholder="Contract address"
-            :state="addressValid(action.token)" required></b-form-input>
-        </b-form-group>
+        <AddressInput :address="action.token" @update:address="a => action.token = a" :name="'withdraw-token'"
+          :label="'Token contract'" :placeholder="'Contract address'" :description="'Token contract address'"
+          :tokens="tokens" :isToken="true" />
 
         <div style="display: flex; gap: 0.4rem">
           <b-form-group id="input-group-transfer-qty" label="Amount to transfer" label-for="input-transfer-qty">
@@ -62,14 +57,10 @@
       </div>
       <div v-else-if="actionType == 'removeConcLp' || actionType == 'removeAmbLp'">
         <div style="display: flex; gap: 0.4rem">
-          <b-form-group id="input-group-removeLp-base" label="Base token" label-for="input-removeLp-base">
-            <b-form-input id="input-removeLp-base" v-model="action.base" placeholder="Token address"
-              :state="addressValid(action.base)" required></b-form-input>
-          </b-form-group>
-          <b-form-group id="input-group-removeLp-quote" label="Quote token" label-for="input-removeLp-quote">
-            <b-form-input id="input-removeLp-quote" v-model="action.quote" placeholder="Token address"
-              :state="addressValid(action.quote)" required></b-form-input>
-          </b-form-group>
+          <AddressInput :address="action.base" @update:address="a => action.base = a" :name="'removeLp-base'"
+            :label="'Base token'" :placeholder="'Token address'" :tokens="tokens" :isToken="true" />
+          <AddressInput :address="action.quote" @update:address="a => action.quote = a" :name="'removeLp-quote'"
+            :label="'Quote token'" :placeholder="'Token address'" :tokens="tokens" :isToken="true" />
         </div>
         <div style="display: flex; gap: 0.4rem">
           <b-form-group id="input-group-removeLp-poolIdx" label="Pool index" label-for="input-removeLp-poolIdx"
@@ -105,12 +96,17 @@
               step="0.1" min="0.2" @change="setSlippageLimits" required></b-form-input>
           </b-form-group>
         </div>
-        <div class="border rounded text-center p-2" v-if="actionFilled">
-          Approximate removed amounts:
-          <br />
-          {{ lpRemovedBaseTokens }} {{ tokens[action.base].symbol }}
-          <br />
-          {{ lpRemovedQuoteTokens }} {{ tokens[action.quote].symbol }}
+        <div class="border rounded text-center p-2" v-if="['removeConcLp', 'removeAmbLp'].includes(actionType) && poolFilled">
+          <div v-if="poolValid">
+            Approximate removed amounts:
+            <br />
+            {{ lpRemovedBaseTokens }} {{ tokens[action.base].symbol }}
+            <br />
+            {{ lpRemovedQuoteTokens }} {{ tokens[action.quote].symbol }}
+          </div>
+          <div v-else>
+            Pool not found
+          </div>
         </div>
       </div>
       <br />
@@ -165,6 +161,8 @@ import {
   BTooltip,
 } from "bootstrap-vue";
 
+import AddressInput from "./AddressInput.vue";
+
 import { parseUnits, formatUnits } from "viem"
 import { fromDisplayPrice, encodeCrocPrice } from '@crocswap-libs/sdk'
 import { getFormattedNumber } from "../number_formatting.jsx"
@@ -174,6 +172,7 @@ import { isValidAddress, lpBaseTokens, lpQuoteTokens, poolKey } from '../utils.j
 export default {
   name: "ActionInput",
   components: {
+    AddressInput,
     BForm,
     BFormGroup,
     BFormInput,
@@ -193,8 +192,8 @@ export default {
     return {
       action: { ...COMMANDS[null] },
       actionType: null,
-      //action: {...COMMANDS.removeConcLp},
-      //actionType: 'removeConcLp',
+      // action: { ...COMMANDS["removeConcLp"] },
+      // actionType: "removeConcLp",
       COMMANDS,
       SETTLE_FLAGS
     };
@@ -213,15 +212,6 @@ export default {
     },
     clearAction: function () {
       this.action = { ...COMMANDS[this.actionType] }
-    },
-    addressValid(address) {
-      if (address == null || address.length == 0) {
-        return null;
-      }
-      if (address.length != 42) {
-        return false;
-      }
-      return isValidAddress(address);
     },
     // there has to be a way of handling potentially unknown decimals better
     reformatUnits: function (value, field, decimals) {
@@ -277,20 +267,31 @@ export default {
     },
   },
   computed: {
-    actionFilled: function () {
-      if (this.action.base && this.action.quote && this.action.qty)
+    poolFilled: function () {
+      if (isValidAddress(this.action.base) == true && isValidAddress(this.action.quote) == true)
         return true
       else
         return false
     },
+    poolValid: function () {
+      if (this.poolFilled) {
+        const pool = this.pools[poolKey(this.action)]
+        if (pool)
+          return true
+        else
+          return false
+      } else {
+        return false
+      }
+    },
     lpRemovedBaseTokens: function () {
-      if (this.actionFilled)
+      if (this.poolValid)
         return lpBaseTokens(this.action, this.pools[poolKey(this.action)], this.action._qtyPct, true)
       else
         return 0
     },
     lpRemovedQuoteTokens: function () {
-      if (this.actionFilled)
+      if (this.poolValid)
         return lpQuoteTokens(this.action, this.pools[poolKey(this.action)], this.action._qtyPct, true)
       else
         return 0

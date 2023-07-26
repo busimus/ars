@@ -55,7 +55,7 @@ export const COMMANDS = {
     lpConduit: null,
     positionType: 'concentrated',
 
-    _slippage: 0.5,
+    _slippage: 1,
     _qtyPct: 100,
     _baseDecimals: null,
     _quoteDecimals: null,
