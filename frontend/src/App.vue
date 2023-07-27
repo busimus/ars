@@ -255,7 +255,7 @@ export default {
       estimating: false,
       refreshTicker: null,
       waitingHashes: {},
-      autoRefreshPaused: true,
+      autoRefreshPaused: false,
       lastRefresh: 0,
       RELAYERS,
       TOKENS,
