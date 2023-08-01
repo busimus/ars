@@ -3,8 +3,13 @@ import { defineConfig } from "vite";
 // import legacy from "@vitejs/plugin-legacy";
 import vue2 from "@vitejs/plugin-vue2";
 // import { visualizer } from "rollup-plugin-visualizer";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 
 export default defineConfig({
+  build: {
+    target: "es2020",
+    sourcemap: true,
+  },
   plugins: [
     vue2(),
     // legacy({
@@ -12,10 +17,15 @@ export default defineConfig({
     //   additionalLegacyPolyfills: ["regenerator-runtime/runtime"],
     // }),
     // visualizer(),
+    sentryVitePlugin({
+      org: "bus-inc",
+      project: "croc",
+      // Auth tokens can be obtained from https://sentry.io/settings/account/api/auth-tokens/
+      // and need `project:releases` and `org:read` scopes
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      telemetry: false,
+    }),
   ],
-  build: {
-    target: "es2020"
-  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

@@ -2,6 +2,7 @@ import cloneDeep from 'lodash.clonedeep'
 
 const BASE_COMMAND = {
   _descripnion: "Unknown command",
+  // _useRelayer: true,
   _useRelayer: true,
   _relayerAddr: null,
   _relayManually: false,
@@ -18,6 +19,29 @@ export const COMMANDS = {
   null: {
     _type: null,
     text: 'Select a command',
+  },
+  swap: {
+    _type: 'swap',
+    text: 'Swap',
+    base: null,
+    quote: null,
+    poolIdx: null,
+    isBuy: null,
+    qty: null,
+    tip: 0,
+    limitPrice: null,
+    minOut: null,
+    settleFlags: 3,
+
+    _toToken: "0x0000000000000000000000000000000000000000",
+    _fromQty: null,
+    // _toToken: "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c",
+    _fromToken: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    // _toToken: "0xc04b0d3107736c32e19f1c62b2af67be61d63a05",
+    _toQty: null,
+    _slippage: 1.0,
+    _estimate: null,
+    ...cloneDeep(BASE_COMMAND),
   },
   withdraw: {
     _type: 'withdraw',
@@ -80,7 +104,7 @@ export const COMMANDS = {
     _baseDecimals: null,
     _quoteDecimals: null,
     ...cloneDeep(BASE_COMMAND),
-  }
+  },
 }
 
 // no need for proper bitflags yet

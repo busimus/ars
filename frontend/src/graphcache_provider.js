@@ -1,53 +1,61 @@
 export const GRAPHCACHE_PROVIDERS = [
+  // { name: "local", url: 'http://localhost:5080/gcgo/' },
+  // { name: "bus's indexer", url: 'https://ambindexer.bus.bz/gcgo/' },
   { name: 'Official', url: 'https://ambindexer.net/gcgo/' }
 ]
 
 
 export class GraphcacheProvider {
-  constructor(provider) {
-    this.provider = provider;
+  constructor() {
+    this.selected_provider_index = 0
   }
 
   async user_balance_tokens(address, chainId) {
-    const url = new URL(this.provider.url);
-
-    url.pathname += 'user_balance_tokens'
-    url.searchParams.append("user", address);
-    url.searchParams.append("chainId", chainId);
-
-    return (await this.sendRequest(url));
+    const req = `user_balance_tokens?user=${address}&chainId=${chainId}`
+    return (await this.sendRequest(req));
   }
 
   async user_positions(address, chainId) {
-    const url = new URL(this.provider.url);
-
-    url.pathname += 'user_positions'
-    url.searchParams.append("user", address);
-    url.searchParams.append("chainId", chainId);
-    url.searchParams.append("omitEmpty", true);
-
-    return (await this.sendRequest(url));
+    const req = `user_positions?user=${address}&chainId=${chainId}&omitEmpty=true`
+    return (await this.sendRequest(req));
   }
 
-  async sendRequest(url, full = false) {
-    const req = await fetch(url, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        //"Content-Type": "application/json",
-      },
-    }).catch();
+  async sendRequest(req, full = false) {
+    let err = null
+    for (const i in GRAPHCACHE_PROVIDERS) {
+      const provider = GRAPHCACHE_PROVIDERS[this.selected_provider_index]
+      const url = new URL(provider.url + req);
 
-    const resp = await req.json();
-    // console.log("sendRequest resp", resp);
+      const abort = new AbortController()
+      const timeout = setTimeout(() => abort.abort(), 5000)
+      try {
+        const req = await fetch(url, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            // "Content-Type": "application/json",
+          },
+          signal: abort.signal,
+        }).catch();
 
-    if (resp.error) {
-      throw resp.error;
+        const resp = await req.json();
+        // console.log("sendRequest resp", resp);
+
+        if (resp.error) {
+          throw resp.error;
+        }
+        if (full) {
+          return resp;
+        } else {
+          return resp.data;
+        }
+      } catch (e) {
+        err = e
+        console.error('graphcache fetch error', e)
+        this.selected_provider_index = (this.selected_provider_index + 1) % GRAPHCACHE_PROVIDERS.length
+      }
     }
-    if (full) {
-      return resp;
-    } else {
-      return resp.data;
-    }
+    console.error('ran out of providers, throwing')
+    throw err
   }
 }

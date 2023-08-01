@@ -5,18 +5,22 @@
        align-items: center;
        justify-content: space-between;
      ">
-      <button id="header-dropdown" style="flex: 1; visibility: hidden">
+      <button style="flex: 1; visibility: hidden">
         <b-icon-arrow-clockwise />
       </button>
       <h4 style="flex: 60" class="text-center">
         Exchange balances
       </h4>
-      <button id="i-header-dropdown" class="btn btn-light" style="flex: 1; margin-bottom: 0.5rem; border: 0px"
+      <b-button id="headerRefresh" style="flex: 1; margin-bottom: 0.5rem; border: 0px"
         @click="$emit('refresh')" title="Refresh DEX data">
         <b-icon-arrow-clockwise :class="{ 'icon-spin': refreshing > 0 }" />
-      </button>
+      </b-button>
     </div>
-    <div v-if="balances.length == 0" class="refresh-spinner spinner-border spinner-border"></div>
+    <div v-if="!address || (refreshing > 0 && !skeletoned && Object.keys(balances).length == 0)" style="display: flex;">
+      <b-skeleton-table :animation="address ? undefined : null" :rows="3" :columns="4" hide-header
+        :table-props="{ bordered: false, striped: true }"></b-skeleton-table>
+    </div>
+    <div v-else-if="(refreshing == 0 || skeletoned) && Object.keys(balances).length == 0" class="text-center">No balances found</div>
     <table id="tokenTable" v-else>
       <thead>
         <tr>
@@ -26,15 +30,16 @@
           <th scope="col"></th>
         </tr>
       </thead>
-      <tr v-for="(token, addr) in balances">
-        <td>{{ token.symbol }}</td>
+      <tr v-for="(balance, addr) in balances" v-if="balance.raw > 0n">
+        <td>{{ tokens[addr].symbol }}</td>
         <td class="text-truncate" style="max-width: 0; padding-right: 0.4rem;">{{ addr }}</td>
-        <td>{{ humanAmount(token.balanceHuman) }}</td>
+        <td>{{ balance.human }}</td>
         <td>
-          <a v-if="token.balance > 0" @click.prevent="$emit('withdraw', addr)" href="#" title="Withdraw">
+          <a v-if="balance.raw > 0" @click.prevent="$emit('withdraw', addr)" href="#" title="Withdraw">
             <b-icon-arrow-bar-up />
           </a>
-          <a v-if="token.balance > 0" @click.prevent="$emit('transfer', addr)" href="#" style="margin-left: 0.5rem" title="Transfer">
+          <a v-if="balance.raw > 0" @click.prevent="$emit('transfer', addr)" href="#" style="margin-left: 0.7rem"
+            title="Transfer">
             <small><b-icon-arrow-90deg-right /></small>
           </a>
         </td>
@@ -44,6 +49,45 @@
     <h4 class="text-center">
       Liquidity positions
     </h4>
+    <div v-if="!address || (refreshing > 0 && !skeletoned && Object.keys(positions).length == 0)" style="display: flex;">
+      <b-skeleton-table :animation="address ? undefined : null" :rows="3" :columns="3" hide-header
+        :table-props="{ bordered: false, striped: true }"></b-skeleton-table>
+    </div>
+    <div v-else-if="(refreshing == 0 || skeletoned) && Object.keys(positions).length == 0" class="text-center">No positions found</div>
+    <table v-else id="positionTable">
+      <thead>
+        <tr>
+          <th>Pair</th>
+          <th>Amounts</th>
+        </tr>
+      </thead>
+      <tr v-for="(pos, posId) in positions">
+        <td>{{ pos.baseSymbol }}<br /> {{ pos.quoteSymbol }}</td>
+        <td>{{ baseLpHumanAmount(pos) }}<br /> {{ quoteLpHumanAmount(pos) }}</td>
+        <td>
+          <a @click.prevent="$emit('removeLp', posId)" href="#" title="Remove">
+            <b-icon-arrow-bar-up />
+          </a>
+        </td>
+      </tr>
+    </table>
+    <!-- <table id="positionTable">
+      <thead>
+        <tr>
+          <th>Pair</th>
+          <th>Amounts</th>
+        </tr>
+      </thead>
+      <tr v-for="(pos, posId) in positions">
+        <td>{{ pos.baseSymbol }}<br /> {{ pos.quoteSymbol }}</td>
+        <td>{{ baseLpHumanAmount(pos) }}<br /> {{ quoteLpHumanAmount(pos) }}</td>
+        <td>
+          <a @click.prevent="$emit('removeLp', posId)" href="#" title="Remove">
+            <b-icon-arrow-bar-up />
+          </a>
+        </td>
+      </tr>
+    </table>
     <table id="positionTable">
       <thead>
         <tr>
@@ -61,11 +105,29 @@
         </td>
       </tr>
     </table>
+    <table id="positionTable">
+      <thead>
+        <tr>
+          <th>Pair</th>
+          <th>Amounts</th>
+        </tr>
+      </thead>
+      <tr v-for="(pos, posId) in positions">
+        <td>{{ pos.baseSymbol }}<br /> {{ pos.quoteSymbol }}</td>
+        <td>{{ baseLpHumanAmount(pos) }}<br /> {{ quoteLpHumanAmount(pos) }}</td>
+        <td>
+          <a @click.prevent="$emit('removeLp', posId)" href="#" title="Remove">
+            <b-icon-arrow-bar-up />
+          </a>
+        </td>
+      </tr>
+    </table> -->
   </div>
 </template>
 
 <script>
 import {
+  BButton,
   BFormInput,
   BFormInvalidFeedback,
   BIconQuestionCircle,
@@ -74,6 +136,7 @@ import {
   BIconArrow90degRight,
   BCollapse,
   BTooltip,
+  BSkeletonTable,
 } from "bootstrap-vue";
 
 import { ethers } from "ethers";
@@ -83,6 +146,7 @@ import { lpBaseTokens, lpQuoteTokens, poolKey } from '../utils.jsx'
 export default {
   name: "ExchangePositions",
   components: {
+    BButton,
     BFormInput,
     BFormInvalidFeedback,
     BIconQuestionCircle,
@@ -91,13 +155,17 @@ export default {
     BIconArrow90degRight,
     BCollapse,
     BTooltip,
+    BSkeletonTable,
   },
   data: function () {
     return {
+      skeletoned: false, // one skeleton is enough skeletons
     };
   },
   props: {
+    address: String,
     balances: Object,
+    tokens: Object,
     positions: Object,
     pools: Object,
     refreshing: Number,
@@ -124,6 +192,10 @@ export default {
   mounted: function () {
   },
   watch: {
+    refreshing: function(newRefreshing, oldRefreshing) {
+      if (newRefreshing == 0 && oldRefreshing == 1)
+        this.skeletoned = true
+    }
   }
 };
 
@@ -146,11 +218,22 @@ td {
 }
 
 #tokenTable tr {
-  border-bottom: 1px solid #e5e5e5;
+  border-bottom: 1px solid #d3d3d3;
 }
 
 #positionTable tr {
-  border-bottom: 1px solid #e5e5e5;
+  border-bottom: 1px solid #d3d3d3;
+}
+
+#headerRefresh {
+  width: auto;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  background:none;
+}
+
+#headerRefresh:focus {
+  box-shadow: 0px 0px 2px lightgrey;
 }
 </style>
 

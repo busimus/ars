@@ -1,5 +1,5 @@
 <template>
-  <b-form-group :id="'input-group-' + name" :label="label" :label-for="'input-' + name" required>
+  <b-form-group :id="'input-group-' + name" :label="label" :label-for="'input-' + name" required style="width: 100%">
     <!-- buncha dumb bullshit needed to get prop updating to work here -->
     <b-form-input :id="'input-' + name" :value="address" @input="$emit('update:address', $event)" :placeholder="placeholder" :state="inputValid"
       required></b-form-input>

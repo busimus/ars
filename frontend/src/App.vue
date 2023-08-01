@@ -1,7 +1,8 @@
 <template>
   <div id="wrapper">
     <div id="main-ui-wrapper" style="padding-top: 0.5em; padding-bottom: 0.5em" class="container-fluid">
-      <div id="main-ui" class="main-panel border shadow-sm rounded">
+      <div class="main-panel panel-col border shadow-sm rounded"
+        style="margin-bottom: 0.5rem; margin-left:auto; margin-right: auto;">
         <img id="logo" alt="Ambient Relay Service" src="./assets/ars_logo.svg" style="margin-bottom: 0.7rem" />
         <a href="#collapseIndicatorChevronDark" v-b-toggle.collapse-about @click.prevent class="text-center"
           style="display: block;  margin-bottom: 0.5rem;" data-bs-toggle="collapse" aria-expanded="false"
@@ -12,7 +13,8 @@
         </a>
         <b-collapse id="collapse-about" style="text-align: justify;">
           <p style="margin-bottom: 0.5rem;">
-            This is an alternative frontend for <a href="https://ambient.finance" target="_blank">Ambient Finance</a>.
+            This is an alternative frontend for <a href="https://ambient.finance" target="_blank">Ambient
+              Finance</a>.
           </p>
           <p style="margin-bottom: 0.5rem;">
             You can use it to send gasless transactions by tipping gas
@@ -22,7 +24,21 @@
         <hr style="margin-top: 0rem; margin-bottom: 0.5rem" />
 
         <div id="w3-button-container">
-          <w3m-core-button balance="show" name="wallet_button"></w3m-core-button>
+          <!-- <w3m-core-button balance="show" name="wallet_button"></w3m-core-button> -->
+          <div v-if="!address">
+            <b-button variant="primary" @click="w3modal">Connect wallet</b-button>
+            <hr style="margin-top: 0.5rem; margin-bottom: 0.5rem" />
+            <span style="text-align: center;">Connect wallet to see positions and balances</span>
+          </div>
+          <div id="w3-connected" v-else class="border" @click="w3modal">
+            <span style="margin-top: auto; margin-bottom: auto;"><strong>{{ this.ethBalance }}</strong></span>
+            <b-button id="w3-address-pill" :class="{ 'with-avatar': this.ensAvatar }" pill variant="primary"
+              @click="w3modal">
+              <b-avatar size="sm" v-if="this.ensAvatar" :src="this.ensAvatar"></b-avatar>
+              {{ this.ensName ? this.ensName :
+                shortHash(this.address) }}
+            </b-button>
+          </div>
           <div v-for="(_, hash) in waitingHashes"
             style="display: flex; align-items: center; justify-content: space-between; padding-top: 1rem;">
             <a href="#" style="flex: 1; padding-bottom: 0.5rem; visibility: hidden">
@@ -39,22 +55,21 @@
             </a>
           </div>
         </div>
-
-        <hr style="margin-top: 0.5rem" />
-        <div v-if="address && chainId">
-          <ExchangePositions :balances="balances" :positions="positions" :pools="pools" :refreshing="refreshing"
-            @refresh="refreshData" @withdraw="(a) => setWithdrawTarget(a, true)"
-            @transfer="(a) => setWithdrawTarget(a, false)" @removeLp="setRemoveLp" />
-        </div>
-        <div class="text-center" v-else>
-          Connect wallet to see positions and balances
-          <hr />
-        </div>
-        <ActionInput ref="actionInput" @perform="performAction" :pools="pools" :tokens="TOKENS[chainId]"
-          :address="address" :signing="signing" :canSign="canSign" />
       </div>
+      <div id="flex-wrap"
+        style="display: flex; gap: 0.5rem; flex-wrap: wrap; width: 100%; justify-content: center; margin-bottom: 0.5rem">
+        <ExchangePositions v-if="address" class="main-panel border shadow-sm rounded" style="width: 100%; height: auto"
+          :address="address" :balances="balances" :tokens="TOKENS[chainId]" :positions="positions" :pools="pools"
+          :refreshing="refreshing" @refresh="refreshData" @withdraw="(a) => setWithdrawTarget(a, true)"
+          @transfer="(a) => setWithdrawTarget(a, false)" @removeLp="setRemoveLp" />
+        <ActionInput class="main-panel border shadow-sm rounded" style="height: auto; width: inherit" ref="actionInput"
+          @perform="performAction" @fetchToken="a => fetchTokenInfo(a, true)" :fetchSwapOutput="fetchSwapOutput"
+          :pools="pools" :tokens="TOKENS[chainId]" :coldTokens="COLD_TOKENS" :balances="balances" :address="address"
+          :signing="signing" :canSign="canSign" :crocChain="CHAINS[chainId]" />
+      </div>
+      <!-- this should obviously be its own component but i'm too tired of dealing with Vue at this point -->
       <div ref="signedCmdsPanel" v-if="Object.keys(signed.options).length > 0" id="signed-cmds-panel"
-        class="main-panel border shadow-sm rounded">
+        class="main-panel border shadow-sm rounded" style="margin: 0 auto 0.5rem auto;">
         <h4 class="text-center">Signed commands</h4>
         <b-form-group id="input-group-relayer" label="Signed command" label-for="input-selected-scmd">
           <b-form-select id="input-selected-scmd" v-model="signed.selected" size="sm" :options="signed.options"
@@ -76,7 +91,7 @@
               <div style="display: flex; gap: 0.4rem">
                 <div style="flex: 2">
                   <b-form-select id="input-tip-token" v-model="scmd._action._selectedTipToken"
-                    :options="scmd._action._tipEstimates" value-field="token" required></b-form-select>
+                    :options="scmd._action._tipEstimates" value-field="token" :state="tipValid(scmd)" required></b-form-select>
                 </div>
                 <b-button variant="dark" @click="estimateTips(scmd)" style="flex: 1" title="Estimate gas cost">
                   <span v-if="scmd._action._gasPrice && !estimating">
@@ -91,7 +106,8 @@
                   <b-icon-arrow-clockwise v-else :class="{ 'icon-spin': estimating }" />
                 </b-button>
               </div>
-              <small class="form-text text-muted text-center mb-2">Will be deducted from your exchange balance (and the
+              <small class="form-text text-muted text-center mb-2">Will be deducted from your exchange balance (and
+                the
                 command will be automatically adjusted to ensure you have enough left)</small>
             </b-form-group>
             <div id="attached-tip" v-if="scmd._action.tip.amount" style="display: flex; align-items: center; gap: 0.5rem">
@@ -104,7 +120,7 @@
               Send manually <b-icon-question-circle id="relayManuallyQuestion" />
             </b-form-checkbox>
             <b-tooltip target="relayManuallyQuestion" triggers="hover">
-              Send the TX from the connected address.<br /> Could be any address, as long as it has ETH for gas.
+              Send the TX from the connected address.<br /> You can connect any address right now, as long as it has ETH for gas.
             </b-tooltip>
             <b-button ref="relayButton" :variant="relaying ? 'outline-success' : 'success'" size="lg" style="width: 100%"
               type=submit :disabled="relayButtonDisabled(scmd)">
@@ -117,6 +133,7 @@
         </div>
       </div>
       <div id="footer" class="text-center">
+        <div class="me">Made by <a href="https://busimus.eth.limo" target="_blank">bus</a></div>
         <div class="source">
           <a href="https://github.com/busimus/ars" target="_blank">Source code</a>
         </div>
@@ -139,6 +156,7 @@ import {
   dump,
 } from "./utils.jsx";
 import {
+  BAvatar,
   BButton,
   BCollapse,
   BDropdown,
@@ -161,19 +179,19 @@ import {
 import { EthereumClient, w3mConnectors, w3mProvider } from '@web3modal/ethereum'
 import { Web3Modal } from '@web3modal/html'
 import { configureChains, createConfig, getPublicClient, getWalletClient, fetchToken } from '@wagmi/core'
-import { mainnet, goerli, arbitrum, arbitrumGoerli } from '@wagmi/core/chains'
+import { mainnet, goerli } from '@wagmi/core/chains'
 
-const chains = [mainnet, goerli, arbitrumGoerli, arbitrum]
+const chains = [mainnet, goerli]
 const projectId = '8978c906351c8a4e3eccd85a700306ab'
 
-const { publicClient } = configureChains(chains, [w3mProvider({ projectId })])
+const { publicClient } = configureChains(chains, [w3mProvider({ projectId })], { batch: { multicall: true, wait: 16 } })
 const wagmiConfig = createConfig({
   autoConnect: true,
   connectors: w3mConnectors({ projectId, chains }),
   publicClient
 })
 const ethereumClient = new EthereumClient(wagmiConfig, chains)
-const web3modal = new Web3Modal({ projectId, themeMode: 'light' }, ethereumClient)
+const web3modal = new Web3Modal({ projectId, themeMode: 'dark' }, ethereumClient)
 
 import { ethers, BigNumber } from "ethers";
 import { roundForConcLiq } from '@crocswap-libs/sdk'
@@ -181,6 +199,7 @@ import cloneDeep from 'lodash.clonedeep'
 
 import { watchAccount, watchNetwork, signTypedData } from '@wagmi/core'
 import { encodeAbiParameters, toHex, numberToHex, hexToBigInt, formatUnits, formatEther } from 'viem'
+import { normalize } from 'viem/ens'
 
 import ExchangePositions from './components/ExchangePositions.vue'
 import ActionInput from './components/ActionInput.vue'
@@ -190,6 +209,7 @@ import { lpBaseTokens, lpQuoteTokens } from './utils.jsx'
 import { CROC_CHAINS } from './constants.js'
 import { CROC_ABI } from './abis/croc.js'
 import { QUERY_ABI } from './abis/query.js'
+import { IMPACT_ABI } from './abis/impact.js'
 import { COMMANDS, SETTLE_TO_DEX } from './dex_actions.jsx'
 import { TOKENS } from './tokens.js'
 
@@ -199,7 +219,7 @@ const RELAYERS = {
     value: 'bus',
     text: "bus",
     endpoint: 'https://relayer.bus.bz/',
-    acceptedTipTokens: ["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", ZERO_ADDRESS]
+    acceptedTipTokens: ["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", ZERO_ADDRESS, "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "0x6b175474e89094c44da98b954eedeac495271d0f"]
     // acceptedTipTokens: ["0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", ZERO_ADDRESS,]//, "0x630f8b9d8f517af8f5b8670e6a167b6c0240d583"],
   }
 }
@@ -212,6 +232,7 @@ const REFRESH_PERIOD = 30000
 export default {
   name: "App",
   components: {
+    BAvatar,
     BButton,
     BCollapse,
     BDropdown,
@@ -255,13 +276,22 @@ export default {
       estimating: false,
       refreshTicker: null,
       waitingHashes: {},
-      autoRefreshPaused: false,
+      autoRefreshPaused: true,
       lastRefresh: 0,
       RELAYERS,
       TOKENS,
+      CHAINS: CROC_CHAINS,
+      COLD_TOKENS: {},
+
+      ethBalance: '',
+      ensName: null,
+      ensAvatar: null,
     };
   },
   methods: {
+    w3modal: async function () {
+      await web3modal.openModal()
+    },
     accountChanged: function (account) {
       console.log('accountChanged', account)
       this.account = account
@@ -269,12 +299,12 @@ export default {
     },
     networkChanged: function (network) {
       console.log('networkChanged', network)
-      this.network = network
+      this.chain = network
       if (network.chain) {
         this.chainId = network.chain.id
         this.refreshData()
       } else {
-        this.chainid = undefined
+        this.chainid = 1
         this.resetData()
       }
     },
@@ -283,8 +313,8 @@ export default {
       if (!withdraw)
         action = cloneDeep({ ...COMMANDS.transfer })
       action.token = tokenAddr
-      action.qty = this.balances[tokenAddr].balanceHuman
-      action._qtyRaw = this.balances[tokenAddr].balance
+      action.qty = this.balances[tokenAddr].string
+      action._qtyRaw = this.balances[tokenAddr].raw
       action._qtyDecimals = this.balances[tokenAddr].decimals
       console.log('setting action', action)
       this.$refs.actionInput.setAction(action)
@@ -332,12 +362,18 @@ export default {
           cmd = this.buildRemoveConcLpCmd(action)
         } else if (action._type == 'removeAmbLp') {
           cmd = this.buildRemoveAmbLpCmd(action)
+        } else if (action._type == 'swap') {
+          cmd = this.buildSwapCmd(action)
         } else {
           throw "Can't perform this action"
         }
 
         if (action._useRelayer != true) {
-          const hash = await this.sendUserTx(cmd)
+          let hash;
+          if (action._type != 'swap')
+            hash = await this.sendUserTx(cmd)
+          else
+            hash = await this.sendSwapTx(cmd)
           console.log(hash)
           await this.waitForHash(hash)
         } else {
@@ -352,6 +388,29 @@ export default {
         console.error('performAction error', e)
       }
       this.signing = false
+    },
+    buildSwapCmd: function (action) {
+      console.log(action)
+      const a = action._estimate.args
+      const callpath = 1
+      const cmd = encodeAbiParameters(
+        [
+          // { name: 'callpath', type: 'uint8' },
+          { name: 'base', type: 'address' },
+          { name: 'quote', type: 'address' },
+          { name: 'poolIdx', type: 'uint256' },
+          { name: 'isBuy', type: 'bool' },
+          { name: 'inBaseQty', type: 'bool' },
+          { name: 'qty', type: 'uint128' },
+          { name: 'tip', type: 'uint16' },
+          { name: 'limitPrice', type: 'uint128' },
+          { name: 'minOut', type: 'uint128' },
+          { name: 'settleFlags', type: 'uint8' },
+        ],
+        [a.base, a.quote, a.poolIdx, a.isBuy, a.inBaseQty, a.qty,
+        a.tip, a.limitPrice, action._estimate.minOut, action.settleFlags]
+      )
+      return { callpath, cmd, _action: action }
     },
     buildRemoveConcLpCmd: function (action) {
       console.log(action)
@@ -489,7 +548,21 @@ export default {
         const client = getPublicClient()
         const sim = await client.simulateContract({
           functionName: 'userCmd', args: [cmd.callpath, cmd.cmd],
+          // functionName: 'userCmd', args: [cmd.cmd],
           address: CROC_CHAINS[this.chainId].addrs.dex, abi: CROC_ABI,
+          // address: '0x37e00522Ce66507239d59b541940F99eA19fF81F', abi: [{
+          //   "inputs": [
+          //     {
+          //       "internalType": "bytes",
+          //       "name": "cmd",
+          //       "type": "bytes"
+          //     }
+          //   ],
+          //   "name": "userCmd",
+          //   "outputs": [],
+          //   "stateMutability": "payable",
+          //   "type": "function"
+          // }],
           account: this.account
         })
         console.log('sim', sim)
@@ -497,6 +570,8 @@ export default {
         return await wallet.writeContract(sim.request)
       } catch (e) {
         console.error('sendUserTx error', e)
+        this.showToast('Send TX error', e.toString(), 'danger')
+        throw e
       }
     },
     sendRelayerTx: async function (cmd, simOnly = false) {
@@ -515,6 +590,29 @@ export default {
         return await wallet.writeContract(sim.request)
       } catch (e) {
         console.error('sendRelayerTx error', e)
+        this.showToast('Send relayer TX error', e.toString(), 'danger')
+        throw e
+      }
+    },
+    sendSwapTx: async function (cmd) {
+      console.log('sendSwapTx', cmd)
+      const action = cmd._action;
+      const a = action._estimate.args;
+      const args = [a.base, a.quote, a.poolIdx, a.isBuy, a.inBaseQty, a.qty,
+      a.tip, a.limitPrice, action._estimate.minOut, action.settleFlags];
+      try {
+        const client = getPublicClient()
+        const sim = await client.simulateContract({
+          functionName: 'swap', args: args,
+          address: CROC_CHAINS[this.chainId].addrs.dex, abi: CROC_ABI,
+          account: this.account
+        })
+        console.log('sim', sim)
+        const wallet = await getWalletClient({ chainId: this.chainId })
+        return await wallet.writeContract(sim.request)
+      } catch (e) {
+        console.error('sendUserTx error', e)
+        this.showToast('Send TX error', e.toString(), 'danger')
         throw e
       }
     },
@@ -552,8 +650,9 @@ export default {
     ensureBalance: function (scmd) {
       const tip = scmd._action.tip;
       const a = scmd._action;
-      const tipTokenBalance = this.balances[tip.token] ? this.balances[tip.token].balance : 0n
+      const tipTokenBalance = this.balances[tip.token] ? this.balances[tip.token].raw : 0n
       console.log('tip', tip, tipTokenBalance)
+      console.log(this.balances)
 
       // If withdrawing/transfering the tip token adjust withdrawan amount if needed
       if ((a._type == 'withdraw' || a._type == 'transfer') && a.token == tip.token) {
@@ -593,7 +692,24 @@ export default {
           }
         }
       }
+
+      if (a._type == 'swap' && a._toToken == tip.token && a.minOut >= tip.amount) {
+        return true
+      }
+
       throw "Not enough DEX balance for tip"
+    },
+    // validates that the selected tip will work
+    tipValid: function(scmd) {
+      console.log('tipValid', scmd)
+      try {
+        const tipToken = scmd._action._selectedTipToken
+        const clonedScmd = cloneDeep(scmd)
+        clonedScmd._action.tip = { token: tipToken, amount: scmd._action._tipEstimates[tipToken].amount }
+        return this.ensureBalance(clonedScmd)
+      } catch (e) {
+        return false
+      }
     },
     // sends signedCmd to relayer and returns TX hash if successful
     relay: async function (scmd) {
@@ -649,52 +765,62 @@ export default {
           tipOptions[ZERO_ADDRESS] = { token: ZERO_ADDRESS, text: `${parseFloat(gasInETH).toFixed(6)} ETH`, amount: gasInWei.toString() }
         }
 
+        const prices = await this.getPrices(relayer.acceptedTipTokens, ZERO_ADDRESS)
+        console.log('gotPrices', prices)
+
         for (const tokenAddress of relayer.acceptedTipTokens) {
           if (tokenAddress == ZERO_ADDRESS)
             continue
-          const token = this.TOKENS[this.chainId][tokenAddress]
-          let price = null
+          let token;
+          let amount = null
           try {
-            price = await this.getPrice(tokenAddress, ZERO_ADDRESS)
+            token = await this.fetchTokenInfo(tokenAddress, true)
+            let price = prices[tokenAddress]
+            if (!price) {
+              console.log('got bad price', price)
+              throw 'got bad price'
+            }
+            amount = BigInt(Math.round(parseInt(gasInWei) / price))
           } catch (e) {
             console.error('getPrice error', e)
             continue
           }
-          // console.log('price', price)
-
-          const amount = BigInt(Math.round(parseInt(gasInWei) / price))
-          let amountHuman = formatUnits(amount, token.decimals)
-          if (["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c"].indexOf(tokenAddress) != -1)
-            amountHuman = parseFloat(amountHuman).toFixed(3)
+          let amountHuman = getFormattedNumber(parseFloat(formatUnits(amount, token.decimals)))
           tipOptions[tokenAddress] = { token: tokenAddress, text: `${amountHuman} ${token.symbol}`, amount: amount.toString() }
         }
         console.log('tipOptions', tipOptions)
         signedCmd._action._tipEstimates = tipOptions
         if (!signedCmd._action._selectedTipToken) {
-          console.log(relayer.acceptedTipTokens[0])
           signedCmd._action._selectedTipToken = relayer.acceptedTipTokens[0]
+        }
+        if (!signedCmd._action._tipEstimates.hasOwnProperty(signedCmd._action._selectedTipToken)) {
+          signedCmd._action._selectedTipToken = ZERO_ADDRESS
         }
       } catch (e) {
         console.error('estimateTips error', e)
       }
       this.estimating = false
-      return tipOptions
     },
-    // return onchain decoded price of an asset relative to some other asset, assuming a pool exists
-    getPrice: async function (priceOf, relativeTo) {
-      const invert = hexToBigInt(priceOf) > hexToBigInt(relativeTo)
-      if (invert)
-        [priceOf, relativeTo] = [relativeTo, priceOf]
-      const pos = { base: priceOf, quote: relativeTo, poolIdx: CROC_CHAINS[this.chainId].poolIndex }
-      let pool = this.pools[poolKey(pos)]
-      if (!pool) {
-        const pools = await this.fetchPools([pos])
-        if (!pools)
-          throw "no such pool"
-        this.pools[poolKey(pos)] = pools[poolKey]
-        pool = pools[poolKey(pos)]
+    // return onchain decoded price of assets relative to some other asset, assuming a pool exists
+    getPrices: async function (pricesOf, relativeTo) {
+      const poolQueries = []
+      for (const priceOf of pricesOf) {
+        if (priceOf == ZERO_ADDRESS)
+          continue
+        const invert = hexToBigInt(priceOf) < hexToBigInt(relativeTo)
+        poolQueries.push({ base: invert ? priceOf : relativeTo, quote: invert ? relativeTo : priceOf, poolIdx: CROC_CHAINS[this.chainId].poolIndex, _priceOf: priceOf })
       }
-      return pool.priceDecoded
+      await this.fetchPools(poolQueries, true)
+      const prices = {}
+      for (const poolQ of poolQueries) {
+        const pool = this.pools[poolKey(poolQ)]
+        if (!pool || !pool.priceDecoded || pool.priceDecoded == 0) {
+          console.warn(`Couldn't fetch price for ${poolQ._priceOf}`)
+          continue
+        }
+        prices[poolQ._priceOf] = pool.priceDecoded
+      }
+      return prices
     },
     // this estimate always seems high
     estimateRelayerGas: async function (cmd) {
@@ -703,7 +829,8 @@ export default {
         let gas = await client.estimateContractGas({
           functionName: 'userCmdRelayer', args: [cmd.callpath, cmd.cmd, cmd.conds, cmd.tip, cmd.sig],
           address: CROC_CHAINS[this.chainId].addrs.dex, abi: CROC_ABI,
-          account: this.account
+          account: ZERO_ADDRESS
+          // account: this.account
         })
         if (cmd.tip == '0x')
           gas += RELAYER_GAS_TIP_MARKUP
@@ -749,9 +876,12 @@ export default {
         return
       this.refreshing += 1
       try {
-        this.positions = await this.fetchPositions(this.address)
-        this.pools = await this.fetchPools(this.positions)
-        this.balances = await this.fetchBalances(this.address)
+        // is this faster? is this slower? i guess we'll never know
+        await Promise.all([this.fetchUserInfo(), await this.fetchPositions(this.address), await this.fetchPools(this.positions), await this.fetchBalances(this.address, [], true), ])
+        // this.fetchUserInfo()
+        // await this.fetchPositions(this.address)
+        // await this.fetchPools(this.positions)
+        // await this.fetchBalances(this.address, [], true)
       } catch (e) {
         console.error("refreshData error", e)
       }
@@ -760,7 +890,10 @@ export default {
     resetData: function () {
       this.balances = {}
       this.positions = {}
-      this.pools = {}
+      // this.pools = {}
+      this.ensName = null
+      this.ensAvatar = null
+      this.ethBalance = null
     },
     fetchPositions: async function (owner) {
       const positions = {}
@@ -790,8 +923,8 @@ export default {
       } catch (e) {
         console.error('fetchPositions error', e)
       }
+      this.positions = positions
       console.log('positions', dump(positions))
-      return positions
     },
     // fetches and updates pos.qty from the chain
     fetchPositionsLiq: async function (positions) {
@@ -824,7 +957,7 @@ export default {
         // pos.quoteQty = reads[2]
       }
     },
-    fetchPools: async function (positions) {
+    fetchPools: async function (positions, ignoreErrors = false) {
       const client = getPublicClient()
       const qContract = {
         address: CROC_CHAINS[this.chainId].addrs.query,
@@ -839,11 +972,17 @@ export default {
       const poolIds = Object.keys(pools)
       const calls = poolIds.map((id) => { return { args: [pools[id].base, pools[id].quote, pools[id].poolIdx], ...qContract } })
       const reads = await client.multicall({ contracts: calls })
+      const fetchedPools = {}
       for (const i in poolIds) {
         const pool = pools[poolIds[i]]
         console.log('fetched pool', poolIds[i], pool, reads[i])
-        if (reads[i].status != "success") {
+        if (reads[i].status != "success" || reads[i].result == 0n) {
           console.error('pool fetch failure', poolIds[i])
+          if (!ignoreErrors)
+            throw 'Pool fetch failure'
+          else {
+            continue
+          }
         }
         const price = reads[i].result
         pool.priceRaw = price
@@ -852,44 +991,81 @@ export default {
         const baseToken = await this.fetchTokenInfo(pool.base)
         const quoteToken = await this.fetchTokenInfo(pool.quote)
         pool.price = toDisplayPrice(decoded, baseToken.decimals, quoteToken.decimals, true)
+        fetchedPools[poolIds[i]] = pool
       }
       console.log('pools', dump(pools))
-      return pools
+      this.pools = Object.assign({}, this.pools, fetchedPools)
+      return fetchedPools
     },
-    fetchTokenInfo: async function (address) {
+    fetchTokens: async function () {
+      // if (this.chainId != 1)
+      // return
+      const response = await fetch('https://tokens.coingecko.com/uniswap/all.json', {
+        method: "GET",
+        referrerPolicy: "no-referrer",
+      });
+      const resp = await response.json()
+      for (const token of resp.tokens) {
+        if (token.logoURI && token.logoURI.startsWith('https://assets.coingecko.com'))
+          token.logoURI.replace(/\/thumb\//, '/large/')
+        token.symbolLower = token.symbol.toLowerCase()
+        token.nameLower = token.name.toLowerCase()
+        this.$set(this.COLD_TOKENS, token.address, token)
+      }
+    },
+    fetchTokenInfo: async function (address, fetchBalance = false) {
+      // console.log('fe', address)
+      if (!address)
+        return
       address = address.toLowerCase()
       let token = this.TOKENS[this.chainId][address]
-      if (token)
-        return token
-      console.log('token cache miss', address)
-      token = await fetchToken({ address, chainId: this.chainId })
-      this.TOKENS[this.chainId][address] = token
+      if (!token) {
+        token = this.COLD_TOKENS[address]
+        if (token)
+          this.$set(this.TOKENS[this.chainId], address, token)
+      }
+      if (!token) {
+        console.log('token cache miss', address)
+        token = await fetchToken({ address, chainId: this.chainId })
+        token.symbolLower = token.symbol.toLowerCase()
+        token.nameLower = token.name.toLowerCase()
+        this.$set(this.TOKENS[this.chainId], address, token)
+      }
+      if (fetchBalance && this.balances[address] == undefined) {
+        this.fetchBalances(this.address, [address])
+      }
       return token
     },
-    fetchBalances: async function (owner) {
-      const balances = {}
+    // fetches DEX balances either for given tokens, or tokens from the indexer, and optionally adds all current balances to either list
+    fetchBalances: async function (owner, tokens = [], includeKnownBalances = false) {
       try {
-        const resp = await this.graphcache.user_balance_tokens(owner, numberToHex(this.chainId))
-        // console.log('tokens resp', resp)
-        // @TODO: remove for prod
-        if (resp.tokens.indexOf(ZERO_ADDRESS) == -1)
-          resp.tokens.unshift(ZERO_ADDRESS)
-        if (this.chainId == 1 && resp.tokens.indexOf("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") == -1)
-          resp.tokens.push("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
-        const surpluses = await this.fetchSurpluses(owner, resp.tokens)
+        if (tokens.length == 0)
+          tokens = (await this.graphcache.user_balance_tokens(owner, numberToHex(this.chainId))).tokens
+        if (includeKnownBalances) {
+          for (const tokenAddr of Object.keys(this.balances))
+            if (!tokens.includes(tokenAddr))
+              tokens.push(tokenAddr)
+        }
+        // @TODO: maybe remove for prod
+        // if (tokens.indexOf(ZERO_ADDRESS) == -1)
+        //   tokens.unshift(ZERO_ADDRESS)
+        // if (this.chainId == 1 && tokens.indexOf("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") == -1)
+        //   tokens.push("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
+        // console.log(owner, tokens)
+        const surpluses = await this.fetchSurpluses(owner, tokens)
         console.log('surpluses', surpluses)
-        for (const tokenAddr of resp.tokens) {
+        for (const tokenAddr of tokens) {
           try {
-            let token = {}
-            if (tokenAddr != ZERO_ADDRESS) {
-              token = await this.fetchTokenInfo(tokenAddr)
-            } else {
-              token = { name: 'Ethereum', symbol: 'ETH', decimals: 18, address: ZERO_ADDRESS }
-            }
-            token.balance = surpluses[tokenAddr]
-            token.balanceHuman = formatUnits(token.balance, token.decimals)
-            if (token.balance > 0)
-              balances[tokenAddr] = token
+            let balance = {}
+            let token = { decimals: 18 }
+            if (tokenAddr != ZERO_ADDRESS)
+              token = await this.fetchTokenInfo(tokenAddr, false)
+            balance.raw = surpluses[tokenAddr]
+            balance.string = formatUnits(balance.raw, token.decimals)
+            balance.float = parseFloat(balance.string)
+            balance.human = getFormattedNumber(balance.float)
+            // if (balance.raw > 0)
+            this.$set(this.balances, tokenAddr, balance)
           } catch (e) {
             console.error('surplus fetch error', e)
           }
@@ -897,8 +1073,7 @@ export default {
       } catch (e) {
         console.error('fetchBalances error', e)
       }
-      console.log('balances', dump(balances))
-      return balances;
+      console.log('balances', dump(this.balances))
     },
     fetchSurpluses: async function (owner, tokens) {
       const client = getPublicClient()
@@ -914,6 +1089,55 @@ export default {
         surpluses[tokens[i]] = reads[i].result
 
       return surpluses
+    },
+    // either qtyFrom or qtyTo should be set
+    fetchSwapOutput: async function (from, to, poolIdx, qtyFrom, qtyTo, slippage = 0.5) {
+      const swap = { success: false, output: null, minOut: null, priceAfter: null, slipDirection: null, args: null }
+      if (!qtyFrom && !qtyTo)
+        return swap
+      const client = getPublicClient()
+      const iContract = {
+        address: CROC_CHAINS[this.chainId].addrs.impact,
+        abi: IMPACT_ABI
+      }
+
+      if (!poolIdx)
+        poolIdx = CROC_CHAINS[this.chainId].poolIndex
+
+      // true if the user wants to pay base token and receive quote token. False if the user wants to receive base token and pay quote token
+      let isBuy = true
+      let [base, quote] = [from, to]
+      if (hexToBigInt(base) > hexToBigInt(quote)) {
+        isBuy = false;
+        [base, quote] = [to, from]
+      }
+
+      let inBaseQty = false
+      if ((qtyFrom && from == base) || (qtyTo && to == base))
+        inBaseQty = true
+
+      const qty = qtyFrom ? qtyFrom : qtyTo
+
+      const limitPrice = isBuy ? 0xffff5433e2b3d8211706e6102aa9471n : 65537n
+      const args = [base, quote, poolIdx, isBuy, inBaseQty, qty, 0, limitPrice]
+      console.log('args', args)
+      const [baseFlow, quoteFlow, finalPrice] = await client.readContract({
+        functionName: 'calcImpact', args, ...iContract
+      })
+      console.log(baseFlow, quoteFlow, finalPrice)
+
+      swap.success = true
+      swap.args = { base, quote, poolIdx, isBuy, inBaseQty, qty, tip: 0, limitPrice }
+      swap.output = inBaseQty ? quoteFlow : baseFlow
+      const outToken =
+        // swap.output = swap.output < 0 ? swap.output * -1n : swap.output
+        swap.output = inBaseQty ^ isBuy ? swap.output : swap.output * -1n
+      swap.priceAfter = finalPrice
+      swap.slipDirection = inBaseQty ^ isBuy ? 1 : -1
+      const slipBps = BigInt(parseInt(slippage * 100) * swap.slipDirection)
+      const scaler = 1000000000n  // i can't math and i can't integer math even more
+      swap.minOut = swap.output + ((swap.output * scaler) / 10000n * slipBps) / scaler
+      return swap
     },
     relayButtonDisabled: function (scmd) {
       let disabled = false
@@ -970,6 +1194,19 @@ export default {
 
       }
     },
+    fetchUserInfo: async function () {
+      if (!this.address) {
+        this.ethBalance = '--'
+        return
+      }
+      const client = getPublicClient()
+      let [ensName, balance] = await Promise.all([client.getEnsName({ address: this.address }), client.getBalance({ address: this.address })]);
+      const symbol = this.chainId == 1 ? 'ETH' : 'gETH'
+      this.ethBalance = `${getFormattedNumber(parseFloat(formatEther(balance)))} ${symbol}`
+      this.ensName = ensName
+      if (this.ensName && !this.ensAvatar)
+        this.ensAvatar = await client.getEnsAvatar({ name: normalize(this.ensName) })
+    },
     removeTip: function (scmd) {
       scmd.tip = '0x'
       scmd._action.tip.amount = 0
@@ -1005,7 +1242,7 @@ export default {
       return `https://${base}/tx/${hash}`
     },
     shortHash: function (hash) {
-      return hash.slice(0, 6) + ".." + hash.slice(-4);
+      return hash.slice(0, 6) + "..." + hash.slice(-4);
     },
     removeWaitingHash: function (hash) {
       this.$delete(this.waitingHashes, hash)
@@ -1036,8 +1273,8 @@ export default {
     },
   },
   mounted: function () {
-    if (!localStorage.termsAccepted)
-      this.$refs["warning-modal"].show();
+    // if (!localStorage.termsAccepted)
+    //   this.$refs["warning-modal"].show();
 
     watchAccount((account) => this.accountChanged(account))
     watchNetwork((network) => this.networkChanged(network))
@@ -1048,7 +1285,8 @@ export default {
         await this.refreshData()
         this.lastRefresh = Date.now()
       }, 500);
-    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    document.addEventListener('visibilitychange', this.onVisibilityChange)
+    this.fetchTokens()
   },
   unmounted: function () {
     if (this.refreshTicker) {
@@ -1060,7 +1298,43 @@ export default {
 };
 </script>
 
-<style>
+<style lang="scss">
+// // Your variable overrides
+// $body-bg: #000;
+
+// // Bootstrap and its default variables
+// @import '../node_modules/bootstrap/scss/bootstrap';
+// // BootstrapVue and its default variables
+// @import '../node_modules/bootstrap-vue/src/index.scss';
+@import 'node_modules/@forevolve/bootstrap-dark/scss/bootstrap-dark.scss';
+
+$bg: #0d1117;
+
+body,
+html {
+  width: 100%;
+  height: 100%;
+  background-color: $bg;
+}
+
+select,
+input,
+button.input-like {
+  background-color: darken($bg, 1%) !important;
+}
+
+a {
+  color: darken($blue, 0%);
+}
+
+a:hover {
+  color: darken($blue, 15%);
+}
+
+w3m-balance {
+  margin-right: auto;
+}
+
 * {
   font-family: Helvetica;
   box-sizing: border-box;
@@ -1075,14 +1349,20 @@ export default {
 #main-ui-wrapper {
   margin-top: auto;
   margin-bottom: auto;
-  max-width: 20rem;
+  // max-width: 20rem;
   padding: 0;
 }
 
 .main-panel {
   padding: 1rem 1rem 1em 1em;
-  background-color: white;
-  margin-bottom: 0.5em;
+  background-color: lighten($bg, 3%);
+  // margin-bottom: 0.5em;
+  max-width: 22rem;
+  // margin: auto;
+}
+
+.panel-col {
+  margin-bottom: 0.5rem;
 }
 
 #logo {
@@ -1090,16 +1370,13 @@ export default {
 }
 
 #footer {
-  margin-top: 0.7rem;
-}
-
-#footer .source {
-  font-size: 0.9rem;
-  color: #666;
+  // margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: $gray-600;
 }
 
 #footer a {
-  color: #777;
+  color: darken($gray-600, 15%);
 }
 
 .load-spinner {
@@ -1174,14 +1451,32 @@ export default {
   }
 }
 
-body,
-html {
-  width: 100%;
-  height: 100%;
-  background-color: #f0f0f0;
-}
-
 #w3-button-container {
   text-align: center;
+  outline: 0;
+}
+
+#w3-connected {
+  background-color: darken($bg, 1%);
+  padding: 0.2rem 0.5rem 0.2rem 0.5rem;
+  border-radius: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  outline: none;
+  cursor: default;
+}
+
+#w3-address-pill {
+  margin: 0.1rem 0 0.1rem 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.2rem;
+  padding: 0.3rem 0.5rem 0.3rem 0.3rem;
+  font-family: monospace;
+}
+
+.with-avatar {
+  padding-left: 0.2rem !important;
 }
 </style>
