@@ -10,7 +10,6 @@ This is an alternative frontend for [Ambient Finance](https://ambient.finance) t
     * Manual mode – regular transactions like the official frontend would send
 * Tips are based on gas estimates of the transaction and can be paid with any token that the relayer permits
 * Tip estimation happens locally, the relayer only sees the signed transaction when the users asks to relay it
-* Self-hosted indexer and Graph node (with fallback to official indexer)
 
 ## Screenshot
 <img src="/screenshots/ars.png?raw=true" height="200">
@@ -22,6 +21,9 @@ This is an alternative frontend for [Ambient Finance](https://ambient.finance) t
 3. (Optional) Set your self-hosted indexer URL before the official URL in `frontend/src/graphcache_provider.js`
 4. Build and run `relayer`: `npm install && node run index.mjs`
 5. Build and deploy `frontend`: `npm install && npm run build`
+
+## TODO
+* Self hosted indexer and graph node
 
 ## Attributions
 * [Vue](https://github.com/vuejs/vue/) – MIT License, Copyright (c) 2013-present, Yuxi (Evan) You

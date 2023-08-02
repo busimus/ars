@@ -26,8 +26,8 @@ export function decodeCrocPrice(val) {
   return sq * sq;
 }
 
-export function toDisplayPrice(price, _baseDecimals, _quoteDecimals, isInverted = false) {
-  const scaled = price * Math.pow(10, _quoteDecimals - _baseDecimals)
+export function toDisplayPrice(price, baseDecimals, quoteDecimals, isInverted = false) {
+  const scaled = price * Math.pow(10, quoteDecimals - baseDecimals)
   return isInverted ? 1 / scaled : scaled
 }
 

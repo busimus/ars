@@ -30,6 +30,7 @@ const RELAY_SPEC = {
 }
 
 const ALREADY_SENT = {}
+const TX_STATUSES = {}
 
 const { chains, publicClient, webSocketPublicClient } = configureChains(
   [mainnet, goerli],
@@ -169,12 +170,13 @@ async function isTipEnough(cmd, gasPrice) {
 
 async function sendRelayerTx(cmd, maxFeePerGas) {
   try {
+    const maxPriorityFeePerGas = parseGwei('0.5')
     const sim = await client.simulateContract({
       functionName: 'userCmdRelayer', args: [cmd.callpath, cmd.cmd, cmd.conds, cmd.tip, cmd.sig],
       address: CROC_CHAINS[CHAIN.id].addrs.dex, abi: CROC_ABI,
       // account: wallet.account,
       account: ZERO_ADDRESS,
-      maxFeePerGas, maxPriorityFeePerGas: parseGwei('0.5'),
+      maxFeePerGas, maxPriorityFeePerGas: maxFeePerGas < maxPriorityFeePerGas ? maxFeePerGas : maxPriorityFeePerGas,
     })
     console.log('sim', sim)
     sim.request.account = wallet.account
@@ -210,6 +212,7 @@ async function relay(cmd) {
     // throw "bad"
     const hash = await sendRelayerTx(cmd, maxFeePerGas)
     ALREADY_SENT[cmd.sig] = hash
+    TX_STATUSES[hash] = 'PENDING'
     resp.success = true
     resp.hash = hash
     delete resp.reason
@@ -218,6 +221,49 @@ async function relay(cmd) {
     resp.reason = `Internal relayer error`
   }
   return resp
+}
+
+async function txStatus(hash, isFlashbots) {
+  const status = { success: null, status: 'Unknown'}
+  let knownStatus = TX_STATUSES[hash]
+  if (knownStatus == 'PENDING' || knownStatus == 'UNKNOWN' || knownStatus == undefined) {
+    if (isFlashbots) {
+      const resp = await fetch(`https://protect.flashbots.net/tx/${hash}`)
+      // console.log('Fetched flashbots status', resp)
+      const json = await resp.json()
+      // console.log('Flashbots status', json)
+      TX_STATUSES[hash] = json.status
+      knownStatus = json.status
+    } else {
+      try {
+        const receipt = await client.getTransactionReceipt({ hash })
+        // console.log('Fetched TX receipt', receipt)
+        if (receipt.status == 'success') {
+          TX_STATUSES[hash] = 'INCLUDED'
+          knownStatus = 'INCLUDED'
+        } else {
+          TX_STATUSES[hash] = 'FAILED'
+          knownStatus = 'FAILED'
+        }
+      } catch (e) {
+        console.error('tx status error', e)
+        TX_STATUSES[hash] = 'PENDING'
+        knownStatus = 'PENDING'
+      }
+    }
+  }
+
+  if (knownStatus == 'PENDING') {
+    status.success = null
+    status.status = 'Pending'
+  } else if (knownStatus == 'INCLUDED') {
+    status.success = true
+    status.status = 'Included'
+  } else if (knownStatus == 'FAILED' || knownStatus == 'CANCELLED') {
+    status.success = false
+    status.status = 'Failed'
+  }
+  return status
 }
 
 app.post("/relay", async (req, res) => {
@@ -233,6 +279,26 @@ app.post("/relay", async (req, res) => {
     resp = await relay(cmd)
   } catch (e) {
     console.error('relay() error', e)
+    res.status(500).json(resp);
+    return
+  }
+  res.status(200).json(resp);
+});
+
+app.get("/status", async (req, res) => {
+  // const o = await client.getGasPrice()
+  let resp = { success: null, status: 'Unknown' }
+  try {
+    const hash = req.query.tx
+    if (true) {
+      resp = await txStatus(hash, CHAIN == mainnet)
+      // resp = await txStatus(hash, false)
+    } else {
+      resp.success = false
+      resp.status = 'Unknown transaction'
+    }
+  } catch (e) {
+    console.error('txStatus() error', e)
     res.status(500).json(resp);
     return
   }

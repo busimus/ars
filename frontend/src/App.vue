@@ -39,18 +39,30 @@
                 shortHash(this.address) }}
             </b-button>
           </div>
-          <div v-for="(_, hash) in waitingHashes"
-            style="display: flex; align-items: center; justify-content: space-between; padding-top: 1rem;">
-            <a href="#" style="flex: 1; padding-bottom: 0.5rem; visibility: hidden">
+          <div v-for="(status, hash) in waitingHashes"
+            style="display: flex; align-items: center; justify-content: space-between; padding-top: 1rem; gap: 0.5rem;">
+            <a href="#" style="width: 1rem; padding-bottom: 0.5rem; visibility: hidden">
               <b-icon-x />
             </a>
-            <div class="text-center animated-underline">
+            <div v-if="status === null" class="text-center animated-underline">
               Waiting for
               <a :href="txLink(hash)" target="_blank">{{
                 shortHash(hash)
               }}</a>
             </div>
-            <a href="#" style="flex: 1; padding-bottom: 0.5rem; color: inherit;" @click.prevent="removeWaitingHash(hash)">
+            <span v-else-if="status === true" class="text-center text-success" style="padding-bottom: 0.5em;">
+              Transaction succeeded
+              <a :href="txLink(hash)" target="_blank">{{
+                shortHash(hash)
+              }}</a>
+            </span>
+            <div v-else-if="status === false" class="text-center text-danger" style="padding-bottom: 0.5em;">
+              Transaction failed
+              <a :href="txLink(hash)" target="_blank">{{
+                shortHash(hash)
+              }}</a>
+            </div>
+            <a href="#" style="width: 1rem; padding-bottom: 0.5rem; color: inherit;" @click.prevent="removeWaitingHash(hash)">
               <b-icon-x />
             </a>
           </div>
@@ -91,7 +103,8 @@
               <div style="display: flex; gap: 0.4rem">
                 <div style="flex: 2">
                   <b-form-select id="input-tip-token" v-model="scmd._action._selectedTipToken"
-                    :options="scmd._action._tipEstimates" value-field="token" :state="tipValid(scmd)" required></b-form-select>
+                    :options="scmd._action._tipEstimates" value-field="token" :state="tipValid(scmd)"
+                    required></b-form-select>
                 </div>
                 <b-button variant="dark" @click="estimateTips(scmd)" style="flex: 1" title="Estimate gas cost">
                   <span v-if="scmd._action._gasPrice && !estimating">
@@ -120,7 +133,8 @@
               Send manually <b-icon-question-circle id="relayManuallyQuestion" />
             </b-form-checkbox>
             <b-tooltip target="relayManuallyQuestion" triggers="hover">
-              Send the TX from the connected address.<br /> You can connect any address right now, as long as it has ETH for gas.
+              Send the TX from the connected address.<br /> You can connect any address right now, as long as it has ETH
+              for gas.
             </b-tooltip>
             <b-button ref="relayButton" :variant="relaying ? 'outline-success' : 'success'" size="lg" style="width: 100%"
               type=submit :disabled="relayButtonDisabled(scmd)">
@@ -196,9 +210,10 @@ const web3modal = new Web3Modal({ projectId, themeMode: 'dark' }, ethereumClient
 import { ethers, BigNumber } from "ethers";
 import { roundForConcLiq } from '@crocswap-libs/sdk'
 import cloneDeep from 'lodash.clonedeep'
+import * as Sentry from "@sentry/browser";
 
 import { watchAccount, watchNetwork, signTypedData } from '@wagmi/core'
-import { encodeAbiParameters, toHex, numberToHex, hexToBigInt, formatUnits, formatEther } from 'viem'
+import { encodeAbiParameters, toHex, numberToHex, hexToBigInt, formatUnits, formatEther, UserRejectedRequestError, parseUnits } from 'viem'
 import { normalize } from 'viem/ens'
 
 import ExchangePositions from './components/ExchangePositions.vue'
@@ -210,8 +225,9 @@ import { CROC_CHAINS } from './constants.js'
 import { CROC_ABI } from './abis/croc.js'
 import { QUERY_ABI } from './abis/query.js'
 import { IMPACT_ABI } from './abis/impact.js'
-import { COMMANDS, SETTLE_TO_DEX } from './dex_actions.jsx'
+import { COMMANDS, SETTLE_TO_DEX, BASE_TO_DEX, QUOTE_TO_DEX } from './dex_actions.jsx'
 import { TOKENS } from './tokens.js'
+import { OrderDirective } from './longform.jsx'
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 const RELAYERS = {
@@ -220,7 +236,6 @@ const RELAYERS = {
     text: "bus",
     endpoint: 'https://relayer.bus.bz/',
     acceptedTipTokens: ["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", ZERO_ADDRESS, "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "0x6b175474e89094c44da98b954eedeac495271d0f"]
-    // acceptedTipTokens: ["0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", ZERO_ADDRESS,]//, "0x630f8b9d8f517af8f5b8670e6a167b6c0240d583"],
   }
 }
 
@@ -228,6 +243,9 @@ const RELAYERS = {
 const RELAYER_GAS_TIP_MARKUP = 15000n
 
 const REFRESH_PERIOD = 30000
+
+// hot path swaps aren't supported for now
+const LONG_PATH_SWAP = true
 
 export default {
   name: "App",
@@ -276,6 +294,7 @@ export default {
       estimating: false,
       refreshTicker: null,
       waitingHashes: {},
+      // waitingHashes: {'0xee1b446020020ff78417077f15f1d536c02873e2a499ea9e10ed856134bd1903': false, '0xee1b446020020ff78417077f15f1d536c02873e2a499ea9e10ed856134bd1904': null, '0xee1b446020020ff78417077f15f1d536c02873e2a499ea9e10ed856134bd1905': true},
       autoRefreshPaused: true,
       lastRefresh: 0,
       RELAYERS,
@@ -323,7 +342,6 @@ export default {
       })
     },
     setRemoveLp: function (positionId) {
-      console.log('setRemoveLp', positionId)
       const pos = this.positions[positionId]
       let action = null
       if (pos.positionType == 'concentrated') {
@@ -350,6 +368,7 @@ export default {
     },
     performAction: async function (actionInput) {
       console.log('performing', actionInput)
+      console.log(dump(actionInput))
       this.signing = true;
       const action = cloneDeep({ ...actionInput })
       let cmd = null
@@ -370,7 +389,7 @@ export default {
 
         if (action._useRelayer != true) {
           let hash;
-          if (action._type != 'swap')
+          if (action._type != 'swap' || (action._useRelayer && LONG_PATH_SWAP))
             hash = await this.sendUserTx(cmd)
           else
             hash = await this.sendSwapTx(cmd)
@@ -386,10 +405,15 @@ export default {
         }
       } catch (e) {
         console.error('performAction error', e)
+        if (!(e.prototype instanceof UserRejectedRequestError) && !(e.name == 'UserRejectedRequestError')) {
+          Sentry.captureException(e)
+        }
       }
       this.signing = false
     },
     buildSwapCmd: function (action) {
+      if (action._useRelayer && LONG_PATH_SWAP)
+        return this.buildLongSwapCmd(action)
       console.log(action)
       const a = action._estimate.args
       const callpath = 1
@@ -410,6 +434,30 @@ export default {
         [a.base, a.quote, a.poolIdx, a.isBuy, a.inBaseQty, a.qty,
         a.tip, a.limitPrice, action._estimate.minOut, action.settleFlags]
       )
+      return { callpath, cmd, _action: action }
+    },
+    buildLongSwapCmd: function (action) {
+      console.log('long', action)
+      const a = action._estimate.args
+      const callpath = 4
+
+      const order = new OrderDirective(action._fromToken)
+      order.open.useSurplus = true
+
+      const hop = order.appendHop(action._toToken)
+      hop.settlement.useSurplus = true
+      const pool = order.appendPool(a.poolIdx)
+      pool.swap.isBuy = a.isBuy
+      pool.swap.inBaseQty = a.inBaseQty
+      pool.swap.qty = a.qty
+      pool.swap.limitPrice = a.limitPrice
+
+      pool.chain.rollExit = true
+      pool.chain.rollType = 0
+
+      const cmd = toHex(order.encodeBytes())
+      console.log(cmd)
+
       return { callpath, cmd, _action: action }
     },
     buildRemoveConcLpCmd: function (action) {
@@ -531,13 +579,13 @@ export default {
             await this.estimateTips(signedCmd)
           const sim = await this.sendRelayerTx(signedCmd, true)
         } catch (e) {
-          console.log('tip or sim error', e)
-          throw "Transaction simulation failed, try creating the command again"
+          // console.error('tip or sim error', e)
+          throw e
         }
 
         return signedCmd
       } catch (e) {
-        console.error('signCmd exception', e)
+        // console.error('signCmd exception', e)
         this.showToast('Signing exception', e.toString(), 'danger')
         throw e
       }
@@ -590,7 +638,8 @@ export default {
         return await wallet.writeContract(sim.request)
       } catch (e) {
         console.error('sendRelayerTx error', e)
-        this.showToast('Send relayer TX error', e.toString(), 'danger')
+        // if (!simOnly)
+        //   this.showToast('Send relayer TX error', e.toString(), 'danger')
         throw e
       }
     },
@@ -639,7 +688,7 @@ export default {
           const resignedCmd = await this.signCmd(clonedScmd)
           const hash = await this.relay(resignedCmd)
           console.log('got hash', hash)
-          await this.waitForHash(hash)
+          await this.waitForHash(hash, RELAYERS[scmd._action._selectedRelayer].endpoint)
         }
       } catch (e) {
         console.error('relayOrSend error', e)
@@ -651,6 +700,7 @@ export default {
       const tip = scmd._action.tip;
       const a = scmd._action;
       const tipTokenBalance = this.balances[tip.token] ? this.balances[tip.token].raw : 0n
+      console.log('scmd', scmd)
       console.log('tip', tip, tipTokenBalance)
       console.log(this.balances)
 
@@ -671,6 +721,53 @@ export default {
           throw "Not enough DEX balance to cover the tip"
         }
       }
+
+      // if swapping to tipped token and settling it to DEX
+      if (a._type == 'swap' && a._toToken == tip.token && a._estimate.minOut >= tip.amount) {
+        if (scmd.settleFlags == SETTLE_TO_DEX) {
+          return true
+        } else if (scmd.settleFlags == BASE_TO_DEX && a._toToken == a._estimate.args.base) {
+          return true
+        } else if (scmd.settleFlags == QUOTE_TO_DEX && a._toToken == a._estimate.args.quote) {
+          return true
+        }
+      }
+
+      // if swapping from tipped token
+      if (a._type == 'swap' && a._fromToken == tip.token) {
+        const remainder = BigInt(tipTokenBalance) - BigInt(a._fromQtyRaw)
+        if (remainder >= tip.amount) {
+          return true
+        } else if (remainder < tip.amount && tipTokenBalance > tip.amount) {
+          console.log('lowering swap amount')
+          const fromToken = this.TOKENS[this.chainId][a._fromToken].decimals
+          const toToken = this.TOKENS[this.chainId][a._toToken].decimals
+          const fromFloat = parseFloat(a._fromQty)
+          const remainderFloat = parseFloat(formatUnits(BigInt(tip.amount) - BigInt(remainder), fromToken.decimals))
+          const percentageReduction = remainderFloat / fromFloat
+
+          console.log('before', a._estimate.args.qty)
+          let lowerFromQtyRaw = BigInt(a._fromQtyRaw) - (BigInt(tip.amount) - remainder)
+          a._estimate.args.qty = lowerFromQtyRaw
+          a._fromQtyRaw = lowerFromQtyRaw
+          a._fromQty = formatUnits(lowerFromQtyRaw, fromToken.decimals)
+          console.log('after', a._estimate.args.qty)
+
+          let toFloat = formatUnits(a._estimate.minOut, toToken.decimals)
+          toFloat = toFloat - toFloat * percentageReduction // should work?
+          const lowerToQtyRaw = parseUnits(toFloat.toString(), toToken.decimals)
+          a._estimate.minOut = lowerToQtyRaw
+
+          console.log('cmd before', scmd.cmd)
+          const { cmd } = this.buildSwapCmd(a)
+          scmd.cmd = cmd
+          console.log('cmd after', scmd.cmd)
+          return true
+        } else {
+          throw "Not enough DEX balance to cover the tip"
+        }
+      }
+
       // If not withdrawing and have enough balance
       if (tipTokenBalance >= BigInt(tip.amount)) {
         return true
@@ -693,15 +790,11 @@ export default {
         }
       }
 
-      if (a._type == 'swap' && a._toToken == tip.token && a.minOut >= tip.amount) {
-        return true
-      }
-
-      throw "Not enough DEX balance for tip"
+      throw "Not enough DEX balance to cover the tip"
     },
     // validates that the selected tip will work
-    tipValid: function(scmd) {
-      console.log('tipValid', scmd)
+    tipValid: function (scmd) {
+      // console.log('tipValid', scmd)
       try {
         const tipToken = scmd._action._selectedTipToken
         const clonedScmd = cloneDeep(scmd)
@@ -739,6 +832,7 @@ export default {
         }
       } catch (e) {
         this.showToast("Relay exception", e.toString(), "danger")
+        Sentry.captureException(e);
         throw e
       }
       this.showToast("Relay success", 'Waiting for transaction to confirm', "success")
@@ -797,7 +891,9 @@ export default {
           signedCmd._action._selectedTipToken = ZERO_ADDRESS
         }
       } catch (e) {
-        console.error('estimateTips error', e)
+        // console.error('estimateTips error', e)
+        this.estimating = false
+        throw e
       }
       this.estimating = false
     },
@@ -837,7 +933,8 @@ export default {
         console.log('gas', gas)
         return gas
       } catch (e) {
-        console.error('sendRelayerTx error', e)
+        // console.error('sendRelayerTx error', e)
+        throw e
       }
     },
     signData: async function (callpath, cmd, conds, tip) {
@@ -877,7 +974,8 @@ export default {
       this.refreshing += 1
       try {
         // is this faster? is this slower? i guess we'll never know
-        await Promise.all([this.fetchUserInfo(), await this.fetchPositions(this.address), await this.fetchPools(this.positions), await this.fetchBalances(this.address, [], true), ])
+        await Promise.all([this.fetchUserInfo(), await this.fetchPositions(this.address), await this.fetchPools(this.positions), await this.fetchBalances(this.address, [], true),])
+        // await Promise.all([await this.fetchBalances(this.address, [], true),])
         // this.fetchUserInfo()
         // await this.fetchPositions(this.address)
         // await this.fetchPools(this.positions)
@@ -1130,7 +1228,6 @@ export default {
       swap.args = { base, quote, poolIdx, isBuy, inBaseQty, qty, tip: 0, limitPrice }
       swap.output = inBaseQty ? quoteFlow : baseFlow
       const outToken =
-        // swap.output = swap.output < 0 ? swap.output * -1n : swap.output
         swap.output = inBaseQty ^ isBuy ? swap.output : swap.output * -1n
       swap.priceAfter = finalPrice
       swap.slipDirection = inBaseQty ^ isBuy ? 1 : -1
@@ -1160,39 +1257,58 @@ export default {
           return 'Relay'
       }
     },
-    waitForHash: async function (hash) {
+    // if relayerEndpoint is set, will pool the tx status from the relayer
+    waitForHash: async function (hash, relayerEndpoint=null) {
+      let timeout = 6.2 * 60_000 // flashbots tries to include the tx for 6 minutes
+      if (!relayerEndpoint)
+        timeout = 30 * 60_000
       if (hash) {
+        let success = null
         this.$set(this.waitingHashes, hash, null)
-        const client = getPublicClient()
         try {
-          const args = { hash, timeout: 60_000, pollingInterval: 6_000 }
-          await this.waitForTx(args)
+          const args = { hash, timeout, pollingInterval: 6_000, _relayerEndpoint: relayerEndpoint }
+          success = await this.pollTxStatus(args)
+          console.log('got tx success', success)
         } catch (e) {
-          console.error('waitForTransactionReceipt error', e)
+          console.error('waitForHash error', e)
         }
-        this.removeWaitingHash(hash)
+        this.$set(this.waitingHashes, hash, success)
         await this.refreshData()
       }
     },
-    waitForTx: async function (args) {
+    pollTxStatus: async function (args) {
       const client = getPublicClient()
       const sleep = (delay) => new Promise((resolve) => setTimeout(resolve, delay))
       const start = Date.now()
       while (true) {
-        if (Date.now() - start > args.timeout)
+        if (args.timeout > 0 && Date.now() - start > args.timeout)
           break
         await sleep(args.pollingInterval)
         try {
-          const tx = await client.getTransaction({ hash: args.hash })
-          console.log(tx)
-          if (tx.blockHash)
-            break
+          if (!args._relayer) {
+            const receipt = await client.getTransactionReceipt({ hash: args.hash })
+            // console.log(receipt)
+            if (receipt.blockHash) {
+              return receipt.status == 'success' ? true : false
+            }
+          } else {
+            const url = new URL(args._relayerEndpoint)
+            url.pathname = '/status'
+            url.searchParams.append('tx', args.hash)
+
+            const resp = await fetch(url)
+            const json = await resp.json()
+            if (json.success != null)
+              return json.success
+
+          }
         } catch (e) {
-          console.error('getTransaction error', e)
+          // console.error('getTransaction error', e)
           continue
         }
 
       }
+      return null
     },
     fetchUserInfo: async function () {
       if (!this.address) {
@@ -1349,7 +1465,6 @@ w3m-balance {
 #main-ui-wrapper {
   margin-top: auto;
   margin-bottom: auto;
-  // max-width: 20rem;
   padding: 0;
 }
 
@@ -1358,7 +1473,6 @@ w3m-balance {
   background-color: lighten($bg, 3%);
   // margin-bottom: 0.5em;
   max-width: 22rem;
-  // margin: auto;
 }
 
 .panel-col {
@@ -1370,7 +1484,6 @@ w3m-balance {
 }
 
 #footer {
-  // margin-top: 0.5rem;
   font-size: 0.8rem;
   color: $gray-600;
 }
@@ -1404,14 +1517,11 @@ w3m-balance {
   }
 }
 
-/* Create the CSS class for the animated underline */
 .animated-underline {
   position: relative;
   padding-bottom: 0.5em;
-  /* display: inline-block; */
 }
 
-/* Add the pseudo-element and apply the animation */
 .animated-underline::after {
   content: "";
   position: absolute;
@@ -1420,7 +1530,6 @@ w3m-balance {
   left: 0;
   width: 0;
   height: 2px;
-  /* Adjust the underline thickness as needed */
   background-color: #6c757d;
   animation: loading-underline 1s cubic-bezier(0.445, 0.05, 0.55, 0.95) infinite;
 }

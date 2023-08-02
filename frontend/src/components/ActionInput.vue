@@ -54,7 +54,7 @@
         <div style="display: flex; gap: 0.4rem">
           <b-form-group id="input-group-withdraw-qty" label-for="input-withdraw-qty" class="mb-0" style="width: 100%">
             <b-form-input id="input-withdraw-qty" v-model="action.qty" placeholder="0 to withdraw everything"
-              @update="reparseUnits(action.qty, '_qtyRaw', action._qtyDecimals)" required></b-form-input>
+              @update="reparseUnits(action.qty, '_qtyRaw', action.token)" required></b-form-input>
             <small class="form-text text-muted">DEX balance: {{ balanceHuman(action.token) }} <a href="#"
                 @click.prevent="setWithdrawMax">Max</a></small>
           </b-form-group>
@@ -72,7 +72,7 @@
         <div style="display: flex; gap: 0.4rem">
           <b-form-group id="input-group-transfer-qty" label-for="input-transfer-qty" class="mb-0" style="width: 100%">
             <b-form-input id="input-transfer-qty" v-model="action.qty" placeholder="0 to transfer everything"
-              @update="reparseUnits(action.qty, '_qtyRaw', action._qtyDecimals)" required></b-form-input>
+              @update="reparseUnits(action.qty, '_qtyRaw', action.token)" required></b-form-input>
             <small class="form-text text-muted">DEX balance: {{ balanceHuman(action.token) }} <a href="#"
                 @click.prevent="setWithdrawMax">Max</a></small>
           </b-form-group>
@@ -146,29 +146,12 @@
         </div>
       </div>
       <br />
-      <b-form-checkbox id="checkbox-relayer" v-if="actionType" v-model="action._useRelayer" name="checkbox-relayer">
-        Sign for gasless execution <b-icon-question-circle id="gaslessQuestion" />
+      <b-form-checkbox id="checkbox-relayer" v-if="actionType" v-model="action._useRelayer" name="checkbox-relayer" switch size="lg" style="text-align: center;">
+        Gasless <b-icon-question-circle id="gaslessQuestion" />
       </b-form-checkbox>
       <b-tooltip target="gaslessQuestion" triggers="hover">
-        You'll have tip a relayer or send the TX yourself from an address with gas
+        You'll have tip a relayer from your DEX balance
       </b-tooltip>
-      <!--
-    <b-form-group
-      v-if="action._useRelayer === true"
-      id="input-group-relayer-address"
-      label="Relayer's address"
-      label-for="input-relayer-address"
-      description="Leave empty to not restrict to any address"
-      style="margin-top: 0.5rem; margin-bottom: 0.5rem;"
-    >
-      <b-form-input
-	id="input-relayer-address"
-	v-model="action._relayerAddr"
-	placeholder="Address of account or contract"
-	@change="reformatUnits(action._qtyRaw, 'qty', action._qtyDecimals)"
-	:state="addressValid(action._relayerAddr)"
-      ></b-form-input>
-    </b-form-group> -->
       <b-button type="submit" v-if="actionType" :variant="sendButtonVariant()" size="lg"
         style="width: 100%; margin-top: 0.5rem" :disabled="!canSign || signing">
         <div v-if="signing" class="load-spinner spinner-border spinner-border-md" role="status">
@@ -234,6 +217,7 @@ export default {
   data: function () {
     return {
       action: { ...COMMANDS['swap'] },
+      // action: { "_type": "swap", "text": "Swap", "base": null, "quote": null, "poolIdx": null, "isBuy": null, "qty": "1000000000", "tip": { "token": null, "amount": null }, "limitPrice": null, "minOut": "69", "settleFlags": 3, "_toToken": "0x0000000000000000000000000000000000000000", "_fromQty": "1000", "_fromQtyRaw": "1000000000", "_fromToken": "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "_toQty": "0.520679069963617198", "_toQtyRaw": 0, "_slippage": 1, "_estimate": { "success": true, "output": "520679069963617198", "minOut": "515472279263981027", "priceAfter": "421011948436206964806132", "slipDirection": -1, "args": { "base": "0x0000000000000000000000000000000000000000", "quote": "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "poolIdx": 36000, "isBuy": false, "inBaseQty": false, "qty": "1000000000", "tip": 0, "limitPrice": "65537" } }, "_descripnion": "Unknown command", "_useRelayer": true, "_relayerAddr": null, "_relayManually": false, "_selectedRelayer": "bus", "_selectedTipToken": null, "_tipEstimates": { "null": { "text": "No estimate yet", "value": null, "amount": 0 } }, "_gasPrice": null, "_description": "Swap: 1,000.00 USDC for ETH" },
       swapDebouncer: 0,
       swapOutput: 0,
       swapPriceAfter: 0,
@@ -272,11 +256,8 @@ export default {
       this.invertSwapIcon = isHovered
     },
     // there has to be a way of handling potentially unknown decimals better
-    reformatUnits: function (value, field, decimals) {
-      this.action[field] = formatUnits(value, decimals)
-    },
-    reparseUnits: function (valueString, field, decimals) {
-      this.action[field] = parseUnits(valueString, decimals)
+    reparseUnits: function (valueString, field, tokenAddress) {
+      this.action[field] = parseUnits(valueString, this.tokens[tokenAddress].decimals)
     },
     setRecvToSelf: function () {
       this.action.recv = this.address
@@ -299,7 +280,7 @@ export default {
       }
     },
     swapInputHandler: function (qtyFrom, qtyTo) {
-      console.log(qtyFrom, typeof(qtyFrom))
+      // console.log(qtyFrom, typeof (qtyFrom))
       if (qtyFrom === '' || qtyTo === '') {
         this.action._fromQty = null
         this.action._toQty = null
@@ -446,7 +427,7 @@ export default {
         return '0.0'
       return balance.human
     },
-    sendButtonVariant: function() {
+    sendButtonVariant: function () {
       let color = this.action._useRelayer ? 'primary' : 'success'
       return this.signing ? `outline-${color}` : color
     },

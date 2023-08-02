@@ -1,6 +1,5 @@
 export const GRAPHCACHE_PROVIDERS = [
-  // { name: "local", url: 'http://localhost:5080/gcgo/' },
-  // { name: "bus's indexer", url: 'https://ambindexer.bus.bz/gcgo/' },
+  // { name: "bus's indexer", url: 'https://ambindexer.bus.bz/gcgo/' }, // it's like >2M RPC requests per day wtf
   { name: 'Official', url: 'https://ambindexer.net/gcgo/' }
 ]
 
