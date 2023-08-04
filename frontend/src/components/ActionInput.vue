@@ -55,7 +55,7 @@
           <b-form-group id="input-group-withdraw-qty" label-for="input-withdraw-qty" class="mb-0" style="width: 100%">
             <b-form-input id="input-withdraw-qty" v-model="action.qty" placeholder="0 to withdraw everything"
               @update="reparseUnits(action.qty, '_qtyRaw', action.token)" required></b-form-input>
-            <small class="form-text text-muted">DEX balance: {{ balanceHuman(action.token) }} <a href="#"
+            <small class="form-text text-muted">DEX balance: {{ dexBalanceHuman(action.token) }} <a href="#"
                 @click.prevent="setWithdrawMax">Max</a></small>
           </b-form-group>
           <CoinSelector :address="action.token" @update:address="a => { action.token = a; setWithdrawMax() }"
@@ -73,11 +73,47 @@
           <b-form-group id="input-group-transfer-qty" label-for="input-transfer-qty" class="mb-0" style="width: 100%">
             <b-form-input id="input-transfer-qty" v-model="action.qty" placeholder="0 to transfer everything"
               @update="reparseUnits(action.qty, '_qtyRaw', action.token)" required></b-form-input>
-            <small class="form-text text-muted">DEX balance: {{ balanceHuman(action.token) }} <a href="#"
+            <small class="form-text text-muted">DEX balance: {{ dexBalanceHuman(action.token) }} <a href="#"
                 @click.prevent="setWithdrawMax">Max</a></small>
           </b-form-group>
           <CoinSelector :address="action.token" @update:address="a => { action.token = a; setWithdrawMax() }"
             :tokens="tokens" :cold_tokens="coldTokens" :balances="balances" @fetchToken="t => $emit('fetchToken', t)" />
+        </div>
+      </div>
+      <div v-if="actionType == 'deposit'">
+        <div v-if="!action._useRelayer">
+          <label id="input-group-deposit-recv" for="input-deposit-recv" class="d-block"
+            style="margin-bottom: 0.1rem;">Recipient</label>
+          <div style="display: flex; gap: 0.4rem">
+            <!-- horrible prop binding because v-model:address doesn't work -->
+            <AddressInput :address="action.recv" @update:address="a => action.recv = a" :name="'deposit-recv'"
+              :placeholder="'Defaults to current address'" :description="'Where tokens will be deposited'"
+              :tokens="tokens" :required=false />
+            <!-- disgusting style, revolting -->
+            <b-button style="height: fit-content;" class="input-like" @click="setRecvToSelf"
+              title="Use currently connected address"><b-icon-wallet-2 /></b-button>
+          </div>
+        </div>
+
+        <label id="input-group-deposit-qty" for="input-deposit-qty" class="d-block" style="margin-bottom: 0.1rem;">Amount
+          to deposit</label>
+        <div style="display: flex; gap: 0.4rem">
+          <b-form-group id="input-group-deposit-qty" label-for="input-deposit-qty" class="mb-0" style="width: 100%">
+            <b-form-input id="input-deposit-qty" v-model="action.qty" placeholder="Amount"
+              @update="reparseUnits(action.qty, '_qtyRaw', action.token)" required></b-form-input>
+            <small class="form-text text-muted">Wallet balance: {{ walletBalanceHuman(action.token) }} <a href="#"
+                @click.prevent="setDepositMax">Max</a></small>
+          </b-form-group>
+          <CoinSelector :address="action.token" @update:address="a => { action.token = a; }" :tokens="tokens"
+            :cold_tokens="coldTokens" :balances="walletBalances" @fetchToken="t => $emit('fetchWalletBalance', t)" />
+        </div>
+        <div style="margin-top: 1rem">
+          <b-alert v-if="action._useRelayer && action.token == ZERO_ADDRESS" variant="danger" show
+            style="margin-bottom: 0rem">ETH doesn't support
+            gasless deposits</b-alert>
+          <b-alert v-else-if="action._useRelayer" variant="warning" show style="margin-bottom: 0rem">Some tokens don't
+            support gasless
+            deposits</b-alert>
         </div>
       </div>
       <div v-else-if="actionType == 'removeConcLp' || actionType == 'removeAmbLp'">
@@ -146,12 +182,16 @@
         </div>
       </div>
       <br />
-      <b-form-checkbox id="checkbox-relayer" v-if="actionType" v-model="action._useRelayer" name="checkbox-relayer" switch size="lg" style="text-align: center;">
-        Gasless <b-icon-question-circle id="gaslessQuestion" />
-      </b-form-checkbox>
-      <b-tooltip target="gaslessQuestion" triggers="hover">
-        You'll have tip a relayer from your DEX balance
-      </b-tooltip>
+      <div style="display: flex; justify-content: center;">
+        <b-form-checkbox id="checkbox-relayer" v-if="actionType" v-model="action._useRelayer" name="checkbox-relayer"
+          switch size="lg">
+          Gasless
+        </b-form-checkbox>
+        <b-icon-question-circle id="gaslessQuestion" style="margin: 0.5rem 0 0 0.5rem" />
+        <b-tooltip target="gaslessQuestion" triggers="hover">
+          You'll have tip a relayer from your DEX balance
+        </b-tooltip>
+      </div>
       <b-button type="submit" v-if="actionType" :variant="sendButtonVariant()" size="lg"
         style="width: 100%; margin-top: 0.5rem" :disabled="!canSign || signing">
         <div v-if="signing" class="load-spinner spinner-border spinner-border-md" role="status">
@@ -165,6 +205,7 @@
 
 <script>
 import {
+  BAlert,
   BForm,
   BFormGroup,
   BFormInput,
@@ -192,11 +233,14 @@ import { getFormattedNumber } from "../number_formatting.jsx"
 import { COMMANDS, SETTLE_FLAGS } from '../dex_actions.jsx'
 import { isValidAddress, lpBaseTokens, lpQuoteTokens, poolKey } from '../utils.jsx'
 
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+
 export default {
   name: "ActionInput",
   components: {
     AddressInput,
     CoinSelector,
+    BAlert,
     BForm,
     BFormGroup,
     BFormInput,
@@ -216,7 +260,7 @@ export default {
   },
   data: function () {
     return {
-      action: { ...COMMANDS['swap'] },
+      action: { ...COMMANDS['deposit'] },
       // action: { "_type": "swap", "text": "Swap", "base": null, "quote": null, "poolIdx": null, "isBuy": null, "qty": "1000000000", "tip": { "token": null, "amount": null }, "limitPrice": null, "minOut": "69", "settleFlags": 3, "_toToken": "0x0000000000000000000000000000000000000000", "_fromQty": "1000", "_fromQtyRaw": "1000000000", "_fromToken": "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "_toQty": "0.520679069963617198", "_toQtyRaw": 0, "_slippage": 1, "_estimate": { "success": true, "output": "520679069963617198", "minOut": "515472279263981027", "priceAfter": "421011948436206964806132", "slipDirection": -1, "args": { "base": "0x0000000000000000000000000000000000000000", "quote": "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "poolIdx": 36000, "isBuy": false, "inBaseQty": false, "qty": "1000000000", "tip": 0, "limitPrice": "65537" } }, "_descripnion": "Unknown command", "_useRelayer": true, "_relayerAddr": null, "_relayManually": false, "_selectedRelayer": "bus", "_selectedTipToken": null, "_tipEstimates": { "null": { "text": "No estimate yet", "value": null, "amount": 0 } }, "_gasPrice": null, "_description": "Swap: 1,000.00 USDC for ETH" },
       swapDebouncer: 0,
       swapOutput: 0,
@@ -226,6 +270,7 @@ export default {
       // action: { ...COMMANDS["removeConcLp"] },
       // actionType: "removeConcLp",
       COMMANDS,
+      ZERO_ADDRESS,
       SETTLE_FLAGS
     };
   },
@@ -235,6 +280,7 @@ export default {
     tokens: Object,
     coldTokens: Object,
     balances: Object,
+    walletBalances: Object,
     address: String,
     crocChain: Object,
     signing: Boolean,
@@ -257,14 +303,26 @@ export default {
     },
     // there has to be a way of handling potentially unknown decimals better
     reparseUnits: function (valueString, field, tokenAddress) {
+      if (!this.tokens[tokenAddress])
+        return
       this.action[field] = parseUnits(valueString, this.tokens[tokenAddress].decimals)
     },
     setRecvToSelf: function () {
       this.action.recv = this.address
     },
     setWithdrawMax: function () {
-      this.action._qtyRaw = this.balances[this.action.token].raw
-      this.action.qty = this.balances[this.action.token].string
+      const balance = this.balances[this.action.token]
+      if (!balance)
+        return
+      this.action._qtyRaw = balance.raw
+      this.action.qty = balance.string
+    },
+    setDepositMax: function () {
+      const balance = this.walletBalances[this.action.token]
+      if (!balance)
+        return
+      this.action._qtyRaw = balance.raw
+      this.action.qty = balance.string
     },
     setSwapToMax: function (side) {
       if (side == 'from') {
@@ -383,11 +441,19 @@ export default {
       const a = this.action;
       try {
         if (this.actionType == 'withdraw' || this.actionType == 'transfer') {
-          const reformatted = formatUnits(a._qtyRaw, this.tokens[a.token].decimals)
+          let qty = a._qtyRaw
+          if (qty == 0n)
+            qty = this.balances[a.token]
+          const reformatted = formatUnits(qty, this.tokens[a.token].decimals)
           const amount = getFormattedNumber(parseFloat(reformatted))
           const shortRecv = `${a.recv.substring(0, 8)}…${a.recv.substring(36)}`;
           const subCmd = this.actionType == 'withdraw' ? 'Withdraw' : 'Transfer'
           a._description = `${subCmd}: ${amount} ${this.tokens[a.token].symbol} to ${shortRecv}`
+        } else if (this.actionType == 'deposit') {
+          const reformatted = formatUnits(a._qtyRaw, this.tokens[a.token].decimals)
+          const amount = getFormattedNumber(parseFloat(reformatted))
+          const shortRecv = `${a.recv.substring(0, 8)}…${a.recv.substring(36)}`;
+          a._description = `Deposit: ${amount} ${this.tokens[a.token].symbol} to ${shortRecv}`
         } else if (['removeConcLp', 'removeAmbLp'].indexOf(this.actionType) != -1) {
           const amtBase = `${this.lpRemovedBaseTokens} ${this.tokens[a.base].symbol}`
           const amtQuote = `${this.lpRemovedQuoteTokens} ${this.tokens[a.quote].symbol}`
@@ -416,15 +482,25 @@ export default {
           return
         }
         this.setSwapSlippage()
+      } else if (this.actionType == 'deposit') {
+        if (!this.action.recv || this.action._useRelayer)
+          this.action.recv = this.address
       }
 
       this.$emit('perform', this.action)
     },
-    balanceHuman: function (tokenAddress) {
+    dexBalanceHuman: function (tokenAddress) {
       const token = this.tokens[tokenAddress]
       const balance = this.balances[tokenAddress]
       if (!balance || !token)
-        return '0.0'
+        return '...'
+      return balance.human
+    },
+    walletBalanceHuman: function (tokenAddress) {
+      const token = this.tokens[tokenAddress]
+      const balance = this.walletBalances[tokenAddress]
+      if (!balance || !token)
+        return '...'
       return balance.human
     },
     sendButtonVariant: function () {

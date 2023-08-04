@@ -62,7 +62,8 @@
                 shortHash(hash)
               }}</a>
             </div>
-            <a href="#" style="width: 1rem; padding-bottom: 0.5rem; color: inherit;" @click.prevent="removeWaitingHash(hash)">
+            <a href="#" style="width: 1rem; padding-bottom: 0.5rem; color: inherit;"
+              @click.prevent="removeWaitingHash(hash)">
               <b-icon-x />
             </a>
           </div>
@@ -75,9 +76,10 @@
           :refreshing="refreshing" @refresh="refreshData" @withdraw="(a) => setWithdrawTarget(a, true)"
           @transfer="(a) => setWithdrawTarget(a, false)" @removeLp="setRemoveLp" />
         <ActionInput class="main-panel border shadow-sm rounded" style="height: auto; width: inherit" ref="actionInput"
-          @perform="performAction" @fetchToken="a => fetchTokenInfo(a, true)" :fetchSwapOutput="fetchSwapOutput"
-          :pools="pools" :tokens="TOKENS[chainId]" :coldTokens="COLD_TOKENS" :balances="balances" :address="address"
-          :signing="signing" :canSign="canSign" :crocChain="CHAINS[chainId]" />
+          @perform="performAction" @fetchToken="a => fetchTokenInfo(a, true)"
+          @fetchWalletBalance="a => fetchWalletBalance(a)" :fetchSwapOutput="fetchSwapOutput" :pools="pools"
+          :tokens="TOKENS[chainId]" :coldTokens="COLD_TOKENS" :balances="balances" :walletBalances="walletBalances"
+          :address="address" :signing="signing" :canSign="canSign" :crocChain="CHAINS[chainId]" />
       </div>
       <!-- this should obviously be its own component but i'm too tired of dealing with Vue at this point -->
       <div ref="signedCmdsPanel" v-if="Object.keys(signed.options).length > 0" id="signed-cmds-panel"
@@ -85,7 +87,8 @@
         <h4 class="text-center">Signed commands</h4>
         <b-form-group id="input-group-relayer" label="Signed command" label-for="input-selected-scmd">
           <b-form-select id="input-selected-scmd" v-model="signed.selected" size="sm" :options="signed.options"
-            value-field="sig" required></b-form-select>
+            @change="estimateTips(signed.options.find(o => o.sig == signed.selected), true)" value-field="sig"
+            required></b-form-select>
         </b-form-group>
         <div class="signed-command-wrapper" :set="scmd = signed.options.find(o => o.sig == signed.selected)">
           <b-form id="relayer-form" @submit="(event) => relayOrSend(event, scmd)">
@@ -106,7 +109,7 @@
                     :options="scmd._action._tipEstimates" value-field="token" :state="tipValid(scmd)"
                     required></b-form-select>
                 </div>
-                <b-button variant="dark" @click="estimateTips(scmd)" style="flex: 1" title="Estimate gas cost">
+                <b-button variant="dark" @click="estimateTips(scmd, true)" style="flex: 1" title="Estimate gas cost">
                   <span v-if="scmd._action._gasPrice && !estimating">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
                       viewBox="0 0 16 16">
@@ -192,7 +195,7 @@ import {
 
 import { EthereumClient, w3mConnectors, w3mProvider } from '@web3modal/ethereum'
 import { Web3Modal } from '@web3modal/html'
-import { configureChains, createConfig, getPublicClient, getWalletClient, fetchToken } from '@wagmi/core'
+import { configureChains, createConfig, getPublicClient, getWalletClient, fetchToken, fetchBalance } from '@wagmi/core'
 import { mainnet, goerli } from '@wagmi/core/chains'
 
 const chains = [mainnet, goerli]
@@ -215,6 +218,7 @@ import * as Sentry from "@sentry/browser";
 import { watchAccount, watchNetwork, signTypedData } from '@wagmi/core'
 import { encodeAbiParameters, toHex, numberToHex, hexToBigInt, formatUnits, formatEther, UserRejectedRequestError, parseUnits } from 'viem'
 import { normalize } from 'viem/ens'
+import { signERC2612Permit } from './permit.jsx'
 
 import ExchangePositions from './components/ExchangePositions.vue'
 import ActionInput from './components/ActionInput.vue'
@@ -281,6 +285,7 @@ export default {
       graphcache: gc,
       positions: {},
       balances: {},
+      walletBalances: {},
       pools: {},
       signed: {
         selected: null,
@@ -320,11 +325,12 @@ export default {
       console.log('networkChanged', network)
       this.chain = network
       if (network.chain) {
+        this.resetData() // before chainId because some components depend on it
         this.chainId = network.chain.id
         this.refreshData()
       } else {
-        this.chainid = 1
         this.resetData()
+        this.chainid = 1
       }
     },
     setWithdrawTarget: function (tokenAddr, withdraw) {
@@ -383,6 +389,9 @@ export default {
           cmd = this.buildRemoveAmbLpCmd(action)
         } else if (action._type == 'swap') {
           cmd = this.buildSwapCmd(action)
+        } else if (action._type == 'deposit') {
+          action.permit = await this.getDepositPermit(action)
+          cmd = this.buildDepositCmd(action)
         } else {
           throw "Can't perform this action"
         }
@@ -521,6 +530,34 @@ export default {
       )
       return { callpath, cmd, _action: action }
     },
+    getDepositPermit: async function (action) {
+      const wallet = await getWalletClient({ chainId: this.chainId })
+      const client = getPublicClient()
+      const permit = await signERC2612Permit(client, wallet, action.token, this.address, CROC_CHAINS[this.chainId].addrs.dex, this.chainId, action._qtyRaw)
+      console.log('permit', permit)
+      return permit
+    },
+    buildDepositCmd: function (action) {
+      const callpath = CROC_CHAINS[this.chainId].depositPermitCallpath
+
+      console.log([83, action.recv, action._qtyRaw, action.token, action.permit.deadline,
+        action.permit.v, action.permit.r, action.permit.s])
+      const cmd = encodeAbiParameters(
+        [
+          { name: 'cmd', type: 'uint8' },
+          { name: 'recv', type: 'address' },
+          { name: 'value', type: 'uint128' },
+          { name: 'token', type: 'address' },
+          { name: 'deadline', type: 'uint256' },
+          { name: 'v', type: 'uint8' },
+          { name: 'r', type: 'bytes32' },
+          { name: 's', type: 'bytes32' },
+        ],
+        [83, action.recv, action._qtyRaw, action.token, action.permit.deadline,
+          action.permit.v, action.permit.r, action.permit.s]
+      )
+      return { callpath, cmd, _action: action }
+    },
     signCmd: async function (cmd) {
       console.log('signCmd', cmd)
       try {
@@ -529,6 +566,7 @@ export default {
         const salt = toHex(ethers.utils.randomBytes(32))
         // const salt = keccak256(this.address + 'ASR') // salting the salt to not collide with anyone else who's also using deterministic salt
         const relayer = cmd._action._relayerAddr ? cmd._action._relayerAddr : ZERO_ADDRESS
+        const deadline = BigInt(parseInt(Date.now() / 1000) + 24 * 60 * 60)
 
         const conds = encodeAbiParameters(
           [
@@ -538,7 +576,8 @@ export default {
             { name: 'nonce', type: 'uint32' },
             { name: 'relayer', type: 'address' }
           ],
-          [281474976710655n, 0, salt, nonce, relayer]
+          // [281474976710655n, 0, salt, nonce, relayer]
+          [deadline, 0, salt, nonce, relayer]
         )
         console.log(conds)
         // const TIP_ALL = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn
@@ -671,7 +710,7 @@ export default {
       try {
         if (scmd._action._relayManually == true) {
           const hash = await this.sendRelayerTx(scmd)
-          await this.waitForHash(hash)
+          await this.waitForHash(hash, null, scmd.sig)
         } else {
           const tipToken = scmd._action._selectedTipToken
           const clonedScmd = cloneDeep(scmd)
@@ -688,7 +727,7 @@ export default {
           const resignedCmd = await this.signCmd(clonedScmd)
           const hash = await this.relay(resignedCmd)
           console.log('got hash', hash)
-          await this.waitForHash(hash, RELAYERS[scmd._action._selectedRelayer].endpoint)
+          await this.waitForHash(hash, RELAYERS[scmd._action._selectedRelayer].endpoint, scmd.sig)
         }
       } catch (e) {
         console.error('relayOrSend error', e)
@@ -702,7 +741,7 @@ export default {
       const tipTokenBalance = this.balances[tip.token] ? this.balances[tip.token].raw : 0n
       console.log('scmd', scmd)
       console.log('tip', tip, tipTokenBalance)
-      console.log(this.balances)
+      // console.log(this.balances)
 
       // If withdrawing/transfering the tip token adjust withdrawan amount if needed
       if ((a._type == 'withdraw' || a._type == 'transfer') && a.token == tip.token) {
@@ -768,8 +807,13 @@ export default {
         }
       }
 
-      // If not withdrawing and have enough balance
+      // If not withdrawing/swapping and have enough balance
       if (tipTokenBalance >= BigInt(tip.amount)) {
+        return true
+      }
+
+      // if depositing the tip token
+      if (a._type == 'deposit' && a.token == tip.token && a._qtyRaw >= tip.amount) {
         return true
       }
 
@@ -835,11 +879,12 @@ export default {
         Sentry.captureException(e);
         throw e
       }
-      this.showToast("Relay success", 'Waiting for transaction to confirm', "success")
+      this.showToast("Relay success", 'Waiting for the transaction to confirm', "success")
       return resp ? resp.hash : null;
     },
     // calculates minimum tip amounts of acceptable tip tokens and sets action._tipEstimates
-    estimateTips: async function (signedCmd) {
+    // handleError shows a toast instead of throwing
+    estimateTips: async function (signedCmd, handleError = false) {
       if (this.estimating)
         return
       this.estimating = true
@@ -891,9 +936,13 @@ export default {
           signedCmd._action._selectedTipToken = ZERO_ADDRESS
         }
       } catch (e) {
-        // console.error('estimateTips error', e)
         this.estimating = false
-        throw e
+        if (handleError) {
+          console.error('estimateTips error', e)
+          this.showToast("Tip estimation error", e.toString(), "danger")
+        } else {
+          throw e
+        }
       }
       this.estimating = false
     },
@@ -972,14 +1021,13 @@ export default {
       if (!this.address || !this.chainId)
         return
       this.refreshing += 1
+      const refreshables = [this.fetchUserInfo(), this.fetchPositions(this.address), this.fetchSurpluses(this.address, [], true),]
+      // const refreshables = [await this.fetchSurpluses(this.address, [], true),]
+      if (this.signed.selected) {
+        refreshables.push(this.estimateTips(this.signed.options.find(o => o.sig == this.signed.selected)))
+      }
       try {
-        // is this faster? is this slower? i guess we'll never know
-        await Promise.all([this.fetchUserInfo(), await this.fetchPositions(this.address), await this.fetchPools(this.positions), await this.fetchBalances(this.address, [], true),])
-        // await Promise.all([await this.fetchBalances(this.address, [], true),])
-        // this.fetchUserInfo()
-        // await this.fetchPositions(this.address)
-        // await this.fetchPools(this.positions)
-        // await this.fetchBalances(this.address, [], true)
+        await Promise.all(refreshables)
       } catch (e) {
         console.error("refreshData error", e)
       }
@@ -987,6 +1035,7 @@ export default {
     },
     resetData: function () {
       this.balances = {}
+      this.walletBalances = {}
       this.positions = {}
       // this.pools = {}
       this.ensName = null
@@ -1017,7 +1066,7 @@ export default {
           }
           positions[pos.positionId] = pos
         }
-        await this.fetchPositionsLiq(positions)
+        await Promise.all([this.fetchPositionsLiq(positions), this.fetchPools(positions)])
       } catch (e) {
         console.error('fetchPositions error', e)
       }
@@ -1092,7 +1141,11 @@ export default {
         fetchedPools[poolIds[i]] = pool
       }
       console.log('pools', dump(pools))
-      this.pools = Object.assign({}, this.pools, fetchedPools)
+      // this.pools = Object.assign({}, this.pools, fetchedPools)
+      // Object.assign(this.pools, fetchedPools)
+      for (const [poolId, pool] of Object.entries(fetchedPools)) {
+        this.$set(this.pools, poolId, pool)
+      }
       return fetchedPools
     },
     fetchTokens: async function () {
@@ -1111,8 +1164,7 @@ export default {
         this.$set(this.COLD_TOKENS, token.address, token)
       }
     },
-    fetchTokenInfo: async function (address, fetchBalance = false) {
-      // console.log('fe', address)
+    fetchTokenInfo: async function (address, fetchSurplus = false) {
       if (!address)
         return
       address = address.toLowerCase()
@@ -1129,13 +1181,29 @@ export default {
         token.nameLower = token.name.toLowerCase()
         this.$set(this.TOKENS[this.chainId], address, token)
       }
-      if (fetchBalance && this.balances[address] == undefined) {
-        this.fetchBalances(this.address, [address])
+      if (fetchSurplus && this.balances[address] == undefined) {
+        this.fetchSurpluses(this.address, [address])
       }
       return token
     },
+    fetchWalletBalance: async function (tokenAddr) {
+      tokenAddr = tokenAddr.toLowerCase()
+      const balanceReq = { address: this.address }
+      if (tokenAddr != ZERO_ADDRESS)
+        balanceReq.token = tokenAddr
+      const [_, wagmiBalance] = await Promise.all([this.fetchTokenInfo(tokenAddr, false), fetchBalance(balanceReq)])
+      console.log('wagmi balance', wagmiBalance)
+      const balance = {
+        raw: wagmiBalance.value,
+        string: wagmiBalance.formatted,
+        float: parseFloat(wagmiBalance.formatted),
+        human: getFormattedNumber(parseFloat(wagmiBalance.formatted)),
+      }
+      this.$set(this.walletBalances, tokenAddr, balance)
+      console.log('bal', this.walletBalances[tokenAddr])
+    },
     // fetches DEX balances either for given tokens, or tokens from the indexer, and optionally adds all current balances to either list
-    fetchBalances: async function (owner, tokens = [], includeKnownBalances = false) {
+    fetchSurpluses: async function (owner, tokens = [], includeKnownBalances = false) {
       try {
         if (tokens.length == 0)
           tokens = (await this.graphcache.user_balance_tokens(owner, numberToHex(this.chainId))).tokens
@@ -1150,7 +1218,7 @@ export default {
         // if (this.chainId == 1 && tokens.indexOf("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") == -1)
         //   tokens.push("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
         // console.log(owner, tokens)
-        const surpluses = await this.fetchSurpluses(owner, tokens)
+        const surpluses = await this.fetchSurplusAmounts(owner, tokens)
         console.log('surpluses', surpluses)
         for (const tokenAddr of tokens) {
           try {
@@ -1169,11 +1237,11 @@ export default {
           }
         }
       } catch (e) {
-        console.error('fetchBalances error', e)
+        console.error('fetchSurpluses error', e)
       }
-      console.log('balances', dump(this.balances))
+      console.log('surpluses', dump(this.balances))
     },
-    fetchSurpluses: async function (owner, tokens) {
+    fetchSurplusAmounts: async function (owner, tokens) {
       const client = getPublicClient()
       const qContract = {
         address: CROC_CHAINS[this.chainId].addrs.query,
@@ -1238,7 +1306,7 @@ export default {
     },
     relayButtonDisabled: function (scmd) {
       let disabled = false
-      if (this.relaying)
+      if (this.relaying || (this.estimating && !scmd._action._relayManually))
         return true
       if (scmd._action._relayManually == false && !scmd._action.tip.amount && !scmd._action._selectedTipToken) {
         disabled = true
@@ -1258,7 +1326,8 @@ export default {
       }
     },
     // if relayerEndpoint is set, will pool the tx status from the relayer
-    waitForHash: async function (hash, relayerEndpoint=null) {
+    // if sig is set, remove the signed command from this.signed after tx confirms
+    waitForHash: async function (hash, relayerEndpoint = null, sig = null) {
       let timeout = 6.2 * 60_000 // flashbots tries to include the tx for 6 minutes
       if (!relayerEndpoint)
         timeout = 30 * 60_000
@@ -1271,6 +1340,16 @@ export default {
           console.log('got tx success', success)
         } catch (e) {
           console.error('waitForHash error', e)
+        }
+        // remove relayed command from this.signed
+        if (sig) {
+          const index = this.signed.options.findIndex((scmd) => scmd.sig === sig)
+          if (this.signed.options.length == 1)
+            this.signed.selected = null
+          else
+            this.signed.selected = this.signed.options[(index + 1) % this.signed.options.length].sig
+
+          this.signed.options.splice(index, 1)
         }
         this.$set(this.waitingHashes, hash, success)
         await this.refreshData()

@@ -139,7 +139,6 @@ import {
   BSkeletonTable,
 } from "bootstrap-vue";
 
-import { ethers } from "ethers";
 import { getFormattedNumber } from "../number_formatting.jsx"
 import { lpBaseTokens, lpQuoteTokens, poolKey } from '../utils.jsx'
 
@@ -176,8 +175,10 @@ export default {
     },
     baseLpHumanAmount: function (pos) {
       const pool = this.pools[poolKey(pos)]
-      if (!pool)
+      if (!pool) {
+        console.warn('no pool for pos yet!', pool)
         return this.humanAmount(NaN)
+      }
       return lpBaseTokens(pos, pool, 100, true)
     },
     quoteLpHumanAmount: function (pos) {

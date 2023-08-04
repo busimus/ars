@@ -5,6 +5,7 @@ const GOERLI_CHAIN = {
     impact: "0x142BE02F2A3A27ecD6e2f18a43c2C234F372C831"
   },
   withdrawCallpath: 0,
+  depositPermitCallpath: 0,
   poolIndex: 36000,
   isTestNet: true,
   chainId: "0x5",
@@ -45,6 +46,7 @@ const MAINNET_CHAIN = {
     impact: "0x3e3EDd3eD7621891E574E5d7f47b1f30A994c0D0"
   },
   withdrawCallpath: 3,
+  depositPermitCallpath: 3,
   poolIndex: 420,
   isTestNet: false,
   chainId: "0x1",

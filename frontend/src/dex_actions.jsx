@@ -61,6 +61,16 @@ export const COMMANDS = {
     _qtyRaw: null,
     ...cloneDeep(BASE_COMMAND),
   },
+  deposit: {
+    _type: 'deposit',
+    text: 'Deposit to DEX balance',
+    recv: '0x09784d03b42581cfc4Fc90a7Ab11C3125DeDEB86',
+    qty: null, // human string with decimal point
+    token: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    permit: null,
+    _qtyRaw: null,
+    ...cloneDeep(BASE_COMMAND),
+  },
   removeConcLp: {
     _type: 'removeConcLp',
     text: 'Remove LP',

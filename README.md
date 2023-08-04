@@ -3,7 +3,7 @@
 This is an alternative frontend for [Ambient Finance](https://ambient.finance) that has a gasless transaction relayer. It allows users to execute DEX commands without needing gas on their address if they have enough tokens on their DEX balance to cover the gas.
 
 ## Features
-* Supports balance withdrawal/transfer, LP removal, // TODO: limit order removal, ERC721 deposits, swaps
+* Supports balance withdrawal/transfer, LP removal, swaps, deposits (EIP-2612)
 * Different ways of command execution:
     * Fully relayed mode – if you don't have any ETH on any address, but have enough DEX balance to pay a tip to the relayer
     * Manually relayed mode – if you have a ETH on a different address, but don't want to (or can't) send it to the address in question
@@ -23,6 +23,9 @@ This is an alternative frontend for [Ambient Finance](https://ambient.finance) t
 5. Build and deploy `frontend`: `npm install && npm run build`
 
 ## TODO
+* Limit orders
+* Deposits with permit support
+* Deadline for signed commands
 * Self hosted indexer and graph node
 
 ## Attributions

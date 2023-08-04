@@ -101,7 +101,7 @@ export default {
       const token = this.tokens[tokenAddress]
       const balance = this.balances[tokenAddress]
       if (!balance || !token)
-        return '0.0'
+        return ''
       return balance.human
     },
   },
