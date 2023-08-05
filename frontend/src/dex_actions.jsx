@@ -1,9 +1,11 @@
 import cloneDeep from 'lodash.clonedeep'
 
+// all of this sucks in many ways, too late now
+
 const BASE_COMMAND = {
   _description: "Unknown command",
-  // _useRelayer: true,
-  _useRelayer: true,
+  // _gasless: true,
+  _gasless: true,
   _relayerAddr: null,
   _relayManually: false,
   _selectedRelayer: 'bus',
@@ -35,7 +37,7 @@ export const COMMANDS = {
 
     _toToken: "0x0000000000000000000000000000000000000000",
     _fromQty: '100',
-    _fromToken: "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c",
+    _fromToken: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
     // _fromToken: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
     // _toToken: "0xc04b0d3107736c32e19f1c62b2af67be61d63a05",
     _toQty: null,
@@ -64,7 +66,7 @@ export const COMMANDS = {
   deposit: {
     _type: 'deposit',
     text: 'Deposit to DEX balance',
-    recv: '0x09784d03b42581cfc4Fc90a7Ab11C3125DeDEB86',
+    recv: null,
     qty: null, // human string with decimal point
     token: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
     permit: null,

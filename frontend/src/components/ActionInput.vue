@@ -12,7 +12,7 @@
           <b-form-group id="input-group-from-qty" label-for="input-from-qty" class="mb-0" style="width: 100%">
             <b-form-input id="input-from-qty" v-model="action._fromQty" placeholder="0.0"
               @input="swapInputHandler(action._fromQty, 0)" required></b-form-input>
-            <small class="form-text text-muted">DEX balance: {{ balanceHuman(action._fromToken) }} <a href="#"
+            <small class="form-text text-muted">DEX balance: {{ dexBalanceHuman(action._fromToken) }} <a href="#"
                 @click.prevent="setSwapToMax('from')">Max</a></small>
           </b-form-group>
           <CoinSelector :address="action._fromToken" @update:address="a => setSwapToken('from', a)" :tokens="tokens"
@@ -29,8 +29,8 @@
           <b-form-group id="input-group-to-qty" label-for="input-to-qty" class="mb-0" style="width: 100%">
             <b-form-input id="input-to-qty" v-model="action._toQty" placeholder="0.0"
               @input="swapInputHandler(0, action._toQty)" required></b-form-input>
-            <small class="form-text text-muted">DEX balance: {{ balanceHuman(action._toToken) }} <a href="#"
-                @click.prevent="setSwapToMax('to')">Max</a></small>
+            <!-- <small class="form-text text-muted">DEX balance: {{ dexBalanceHuman(action._toToken) }} <a href="#"
+                @click.prevent="setSwapToMax('to')">Max</a></small> -->
           </b-form-group>
           <CoinSelector :address="action._toToken" @update:address="a => setSwapToken('to', a)" :tokens="tokens"
             :cold_tokens="coldTokens" :balances="balances" @fetchToken="t => $emit('fetchToken', t)" />
@@ -43,7 +43,7 @@
         <div style="display: flex; gap: 0.4rem">
           <!-- horrible prop binding because v-model:address doesn't work -->
           <AddressInput :address="action.recv" @update:address="a => action.recv = a" :name="'withdraw-recv'"
-            :placeholder="'Address'" :description="'Where tokens will be sent'" :tokens="tokens" />
+            :placeholder="'Defaults to connected address'" :description="'Where tokens will be sent'" :tokens="tokens" :required="false" />
           <!-- disgusting style, revolting -->
           <b-button style="height: fit-content;" class="input-like" @click="setRecvToSelf"
             title="Use currently connected address"><b-icon-wallet-2 /></b-button>
@@ -81,13 +81,13 @@
         </div>
       </div>
       <div v-if="actionType == 'deposit'">
-        <div v-if="!action._useRelayer">
+        <div v-if="!action._gasless">
           <label id="input-group-deposit-recv" for="input-deposit-recv" class="d-block"
             style="margin-bottom: 0.1rem;">Recipient</label>
           <div style="display: flex; gap: 0.4rem">
             <!-- horrible prop binding because v-model:address doesn't work -->
             <AddressInput :address="action.recv" @update:address="a => action.recv = a" :name="'deposit-recv'"
-              :placeholder="'Defaults to current address'" :description="'Where tokens will be deposited'"
+              :placeholder="'Defaults to connected address'" :description="'Where tokens will be deposited'"
               :tokens="tokens" :required=false />
             <!-- disgusting style, revolting -->
             <b-button style="height: fit-content;" class="input-like" @click="setRecvToSelf"
@@ -108,21 +108,16 @@
             :cold_tokens="coldTokens" :balances="walletBalances" @fetchToken="t => $emit('fetchWalletBalance', t)" />
         </div>
         <div style="margin-top: 1rem">
-          <b-alert v-if="action._useRelayer && action.token == ZERO_ADDRESS" variant="danger" show
-            style="margin-bottom: 0rem">ETH doesn't support
+          <b-alert v-if="action._gasless && action.token == ZERO_ADDRESS" variant="danger" show
+            style="margin-bottom: 0rem" class="smaller-alert">ETH doesn't support
             gasless deposits</b-alert>
-          <b-alert v-else-if="action._useRelayer" variant="warning" show style="margin-bottom: 0rem">Some tokens don't
+          <b-alert v-else-if="action._gasless" variant="warning" show style="margin-bottom: 0rem"
+            class="smaller-alert">Some tokens don't
             support gasless
-            deposits</b-alert>
+            deposits. <a href="#" @click.prevent="$refs['gasless-deposits-modal'].show()">See list</a></b-alert>
         </div>
       </div>
       <div v-else-if="actionType == 'removeConcLp' || actionType == 'removeAmbLp'">
-        <!-- <div style="display: flex; gap: 0.4rem">
-          <AddressInput :address="action.base" @update:address="a => action.base = a" :name="'removeLp-base'"
-            :label="'Base token'" :placeholder="'Token address'" :tokens="tokens" :isToken="true" />
-          <AddressInput :address="action.quote" @update:address="a => action.quote = a" :name="'removeLp-quote'"
-            :label="'Quote token'" :placeholder="'Token address'" :tokens="tokens" :isToken="true" />
-        </div> -->
         <b-form-group>
           <div style="display: flex; gap: 0.4rem">
             <CoinSelector :label="'Base token'" :address="action.base" @update:address="a => { action.base = a }"
@@ -183,7 +178,7 @@
       </div>
       <br />
       <div style="display: flex; justify-content: center;">
-        <b-form-checkbox id="checkbox-relayer" v-if="actionType" v-model="action._useRelayer" name="checkbox-relayer"
+        <b-form-checkbox id="checkbox-relayer" v-if="actionType" v-model="action._gasless" name="checkbox-relayer"
           switch size="lg">
           Gasless
         </b-form-checkbox>
@@ -193,16 +188,32 @@
         </b-tooltip>
       </div>
       <b-button type="submit" v-if="actionType" :variant="sendButtonVariant()" size="lg"
-        style="width: 100%; margin-top: 0.5rem" :disabled="!canSign || signing">
+        style="width: 100%; margin-top: 0.5rem" :disabled="!canSign || signing || actionImpossible == true">
         <div v-if="signing" class="load-spinner spinner-border spinner-border-md" role="status">
-          <span class="sr-only">{{ action._useRelayer ? 'Signing...' : 'Sending' }}</span>
+          <span class="sr-only">{{ action._gasless ? 'Signing...' : 'Sending' }}</span>
         </div>
-        <div v-else-if="!signing">{{ action._useRelayer ? 'Sign' : 'Send' }}</div>
+        <div v-else-if="!signing">{{ action._gasless ? 'Sign' : 'Send' }}</div>
       </b-button>
     </b-form>
+    <b-modal
+        ref="gasless-deposits-modal"
+        title="Gasless deposit support"
+        ok-only
+        ok-variant="primary"
+        size="lg"
+        centered
+      >
+        <b-form-textarea
+          id="gasless-tokens-textarea"
+          v-model="GASLESS_TOKENS"
+          readonly
+          rows="7"
+          wrap="soft"
+        />
+      </b-modal>
+
   </div>
 </template>
-
 <script>
 import {
   BAlert,
@@ -211,6 +222,7 @@ import {
   BFormInput,
   BFormSelect,
   BFormCheckbox,
+  BFormTextarea,
   BFormInvalidFeedback,
   BIconArrowClockwise,
   BIconArrowDownShort,
@@ -219,6 +231,7 @@ import {
   BIconArrowBarUp,
   BIconWallet2,
   BButton,
+  BModal,
   BCollapse,
   BTooltip,
 } from "bootstrap-vue";
@@ -235,6 +248,11 @@ import { isValidAddress, lpBaseTokens, lpQuoteTokens, poolKey } from '../utils.j
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
+const GASLESS_TOKENS = `Tokens with confirmed support for gasless deposits:
+USDC, UNI, stETH, wstETH, LUSD, R, RSR, ARB, 1INCH, and a few others.
+
+If the token you're interested in isn't listed then try it anyway – if you can create a signed deposit command without errors then it's supported.`
+
 export default {
   name: "ActionInput",
   components: {
@@ -246,6 +264,7 @@ export default {
     BFormInput,
     BFormSelect,
     BFormCheckbox,
+    BFormTextarea,
     BFormInvalidFeedback,
     BFormInvalidFeedback,
     BIconArrowClockwise,
@@ -255,13 +274,14 @@ export default {
     BIconArrowBarUp,
     BIconWallet2,
     BButton,
+    BModal,
     BCollapse,
     BTooltip,
   },
   data: function () {
     return {
-      action: { ...COMMANDS['deposit'] },
-      // action: { "_type": "swap", "text": "Swap", "base": null, "quote": null, "poolIdx": null, "isBuy": null, "qty": "1000000000", "tip": { "token": null, "amount": null }, "limitPrice": null, "minOut": "69", "settleFlags": 3, "_toToken": "0x0000000000000000000000000000000000000000", "_fromQty": "1000", "_fromQtyRaw": "1000000000", "_fromToken": "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "_toQty": "0.520679069963617198", "_toQtyRaw": 0, "_slippage": 1, "_estimate": { "success": true, "output": "520679069963617198", "minOut": "515472279263981027", "priceAfter": "421011948436206964806132", "slipDirection": -1, "args": { "base": "0x0000000000000000000000000000000000000000", "quote": "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "poolIdx": 36000, "isBuy": false, "inBaseQty": false, "qty": "1000000000", "tip": 0, "limitPrice": "65537" } }, "_descripnion": "Unknown command", "_useRelayer": true, "_relayerAddr": null, "_relayManually": false, "_selectedRelayer": "bus", "_selectedTipToken": null, "_tipEstimates": { "null": { "text": "No estimate yet", "value": null, "amount": 0 } }, "_gasPrice": null, "_description": "Swap: 1,000.00 USDC for ETH" },
+      action: { ...COMMANDS['swap'] },
+      // action: { "_type": "swap", "text": "Swap", "base": null, "quote": null, "poolIdx": null, "isBuy": null, "qty": "1000000000", "tip": { "token": null, "amount": null }, "limitPrice": null, "minOut": "69", "settleFlags": 3, "_toToken": "0x0000000000000000000000000000000000000000", "_fromQty": "1000", "_fromQtyRaw": "1000000000", "_fromToken": "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "_toQty": "0.520679069963617198", "_toQtyRaw": 0, "_slippage": 1, "_estimate": { "success": true, "output": "520679069963617198", "minOut": "515472279263981027", "priceAfter": "421011948436206964806132", "slipDirection": -1, "args": { "base": "0x0000000000000000000000000000000000000000", "quote": "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "poolIdx": 36000, "isBuy": false, "inBaseQty": false, "qty": "1000000000", "tip": 0, "limitPrice": "65537" } }, "_descripnion": "Unknown command", "_gasless": true, "_relayerAddr": null, "_relayManually": false, "_selectedRelayer": "bus", "_selectedTipToken": null, "_tipEstimates": { "null": { "text": "No estimate yet", "value": null, "amount": 0 } }, "_gasPrice": null, "_description": "Swap: 1,000.00 USDC for ETH" },
       swapDebouncer: 0,
       swapOutput: 0,
       swapPriceAfter: 0,
@@ -271,7 +291,8 @@ export default {
       // actionType: "removeConcLp",
       COMMANDS,
       ZERO_ADDRESS,
-      SETTLE_FLAGS
+      SETTLE_FLAGS,
+      GASLESS_TOKENS,
     };
   },
   emits: ['perform', 'fetchToken'],
@@ -305,7 +326,11 @@ export default {
     reparseUnits: function (valueString, field, tokenAddress) {
       if (!this.tokens[tokenAddress])
         return
-      this.action[field] = parseUnits(valueString, this.tokens[tokenAddress].decimals)
+      try {
+        this.action[field] = parseUnits(valueString, this.tokens[tokenAddress].decimals)
+      } catch {
+        this.action[field] = null
+      }
     },
     setRecvToSelf: function () {
       this.action.recv = this.address
@@ -338,21 +363,20 @@ export default {
       }
     },
     swapInputHandler: function (qtyFrom, qtyTo) {
-      // console.log(qtyFrom, typeof (qtyFrom))
+      console.log('from', qtyFrom, typeof (qtyFrom))
+      console.log('to  ', qtyTo, typeof (qtyTo))
       if (qtyFrom === '' || qtyTo === '') {
+        console.log('1')
         this.action._fromQty = null
         this.action._toQty = null
         return
       }
-      if (qtyFrom !== '' && qtyFrom <= 0) {
+      if (typeof (qtyFrom) == 'string')
         this.action._toQty = null
-        return
-      }
-      if (qtyTo !== '' && qtyFrom <= 0) {
+      if (typeof (qtyTo) == 'string')
         this.action._fromQty = null
-        return
-      }
       if (qtyFrom <= 0 && qtyTo <= 0) {
+        console.log('4')
         return
       }
       if (!this.action._fromToken || !this.action._toToken)
@@ -473,7 +497,6 @@ export default {
     },
     perform: function (event) {
       event.preventDefault()
-      this.describe()
       if (['removeConcLp', 'removeAmbLp'].indexOf(this.actionType) != -1)
         this.setSlippageLimits()
       else if (this.actionType == 'swap') {
@@ -483,10 +506,14 @@ export default {
         }
         this.setSwapSlippage()
       } else if (this.actionType == 'deposit') {
-        if (!this.action.recv || this.action._useRelayer)
+        if (!this.action.recv || this.action._gasless)
+          this.action.recv = this.address
+      } else if (this.actionType == 'withdraw') {
+        if (!this.action.recv)
           this.action.recv = this.address
       }
 
+      this.describe()
       this.$emit('perform', this.action)
     },
     dexBalanceHuman: function (tokenAddress) {
@@ -504,7 +531,7 @@ export default {
       return balance.human
     },
     sendButtonVariant: function () {
-      let color = this.action._useRelayer ? 'primary' : 'success'
+      let color = this.action._gasless ? 'primary' : 'success'
       return this.signing ? `outline-${color}` : color
     },
   },
@@ -516,6 +543,10 @@ export default {
       set: function (actionType) {
         this.action = cloneDeep(COMMANDS[actionType])
       }
+    },
+    actionImpossible: function() {
+      if (this.actionType == 'deposit' && this.action._gasless && this.action.token == ZERO_ADDRESS)
+        return true
     },
     poolFilled: function () {
       if (isValidAddress(this.action.base) == true && isValidAddress(this.action.quote) == true)
@@ -558,6 +589,10 @@ export default {
 <style>
 .form-group label {
   margin-bottom: 0.1rem;
+}
+
+.smaller-alert {
+  padding: 0.5rem 1rem !important;
 }
 </style>
 

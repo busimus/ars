@@ -122,7 +122,7 @@
                   <b-icon-arrow-clockwise v-else :class="{ 'icon-spin': estimating }" />
                 </b-button>
               </div>
-              <small class="form-text text-muted text-center mb-2">Will be deducted from your exchange balance (and
+              <small class="form-text text-muted text-center mb-2">Will be deducted from your exchange balance (or
                 the
                 command will be automatically adjusted to ensure you have enough left)</small>
             </b-form-group>
@@ -216,7 +216,7 @@ import cloneDeep from 'lodash.clonedeep'
 import * as Sentry from "@sentry/browser";
 
 import { watchAccount, watchNetwork, signTypedData } from '@wagmi/core'
-import { encodeAbiParameters, toHex, numberToHex, hexToBigInt, formatUnits, formatEther, UserRejectedRequestError, parseUnits } from 'viem'
+import { encodeAbiParameters, toHex, numberToHex, hexToBigInt, formatUnits, formatEther, UserRejectedRequestError, parseUnits, parseEther } from 'viem'
 import { normalize } from 'viem/ens'
 import { signERC2612Permit } from './permit.jsx'
 
@@ -239,7 +239,10 @@ const RELAYERS = {
     value: 'bus',
     text: "bus",
     endpoint: 'https://relayer.bus.bz/',
-    acceptedTipTokens: ["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", ZERO_ADDRESS, "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "0x6b175474e89094c44da98b954eedeac495271d0f"]
+    acceptedTipTokens: {
+      1: ["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", ZERO_ADDRESS, "0xdac17f958d2ee523a2206206994597c13d831ec7", "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", "0x6b175474e89094c44da98b954eedeac495271d0f"],
+      5: [ZERO_ADDRESS, "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "0xdc31Ee1784292379Fbb2964b3B9C4124D8F89C60", "0xc04b0d3107736c32e19f1c62b2af67be61d63a05"]
+    }
   }
 }
 
@@ -325,11 +328,11 @@ export default {
       console.log('networkChanged', network)
       this.chain = network
       if (network.chain) {
-        this.resetData() // before chainId because some components depend on it
+        this.resetData(true) // before chainId because some components depend on it
         this.chainId = network.chain.id
         this.refreshData()
       } else {
-        this.resetData()
+        this.resetData(true)
         this.chainid = 1
       }
     },
@@ -396,9 +399,9 @@ export default {
           throw "Can't perform this action"
         }
 
-        if (action._useRelayer != true) {
+        if (action._gasless != true) {
           let hash;
-          if (action._type != 'swap' || (action._useRelayer && LONG_PATH_SWAP))
+          if (action._type != 'swap' || (action._gasless && LONG_PATH_SWAP))
             hash = await this.sendUserTx(cmd)
           else
             hash = await this.sendSwapTx(cmd)
@@ -421,7 +424,7 @@ export default {
       this.signing = false
     },
     buildSwapCmd: function (action) {
-      if (action._useRelayer && LONG_PATH_SWAP)
+      if (action._gasless && LONG_PATH_SWAP)
         return this.buildLongSwapCmd(action)
       console.log(action)
       const a = action._estimate.args
@@ -450,9 +453,11 @@ export default {
       const a = action._estimate.args
       const callpath = 4
 
+      console.log('opening order', action._fromToken)
       const order = new OrderDirective(action._fromToken)
       order.open.useSurplus = true
 
+      console.log('opening hop', action._toToken)
       const hop = order.appendHop(action._toToken)
       hop.settlement.useSurplus = true
       const pool = order.appendPool(a.poolIdx)
@@ -891,23 +896,28 @@ export default {
       const tipOptions = {}
       try {
         const relayer = RELAYERS[signedCmd._action._selectedRelayer]
+        const tipTokens = relayer.acceptedTipTokens[this.chainId]
         const gas = await this.estimateRelayerGas(signedCmd)
         const client = getPublicClient()
         // const gasPrice = 1000000000000n
-        const gasPrice = await client.getGasPrice()
+        let gasPrice = await client.getGasPrice()
+        if (this.chainId != 1 && gasPrice < parseEther('2', 'gwei')) // low gas on goerli breaks tip estimation
+          gasPrice = parseEther('2', 'gwei')
+
         signedCmd._action._gasPrice = `${Math.ceil(parseInt(gasPrice) / 1000000000)} gwei`
         const gasInWei = gas * gasPrice
         const gasInETH = formatEther(gasInWei)
         console.log('gasPrice', gasPrice)
+
         console.log('gasInWei', gas * gasPrice)
-        if (relayer.acceptedTipTokens.indexOf(ZERO_ADDRESS) != -1) {
+        if (tipTokens.indexOf(ZERO_ADDRESS) != -1) {
           tipOptions[ZERO_ADDRESS] = { token: ZERO_ADDRESS, text: `${parseFloat(gasInETH).toFixed(6)} ETH`, amount: gasInWei.toString() }
         }
 
-        const prices = await this.getPrices(relayer.acceptedTipTokens, ZERO_ADDRESS)
+        const prices = await this.getPrices(tipTokens, ZERO_ADDRESS)
         console.log('gotPrices', prices)
 
-        for (const tokenAddress of relayer.acceptedTipTokens) {
+        for (const tokenAddress of tipTokens) {
           if (tokenAddress == ZERO_ADDRESS)
             continue
           let token;
@@ -930,7 +940,7 @@ export default {
         console.log('tipOptions', tipOptions)
         signedCmd._action._tipEstimates = tipOptions
         if (!signedCmd._action._selectedTipToken) {
-          signedCmd._action._selectedTipToken = relayer.acceptedTipTokens[0]
+          signedCmd._action._selectedTipToken = tipTokens[0]
         }
         if (!signedCmd._action._tipEstimates.hasOwnProperty(signedCmd._action._selectedTipToken)) {
           signedCmd._action._selectedTipToken = ZERO_ADDRESS
@@ -1033,14 +1043,18 @@ export default {
       }
       this.refreshing -= 1
     },
-    resetData: function () {
+    resetData: function (full = false) {
       this.balances = {}
       this.walletBalances = {}
       this.positions = {}
-      // this.pools = {}
+      this.signed.selected = null
+      this.signed.options = []
       this.ensName = null
       this.ensAvatar = null
       this.ethBalance = null
+      if (full) {
+        this.pools = {}
+      }
     },
     fetchPositions: async function (owner) {
       const positions = {}
@@ -1335,7 +1349,7 @@ export default {
         let success = null
         this.$set(this.waitingHashes, hash, null)
         try {
-          const args = { hash, timeout, pollingInterval: 6_000, _relayerEndpoint: relayerEndpoint }
+          const args = { hash, timeout, pollingInterval: 6_000, _relayerEndpoint: relayerEndpoint, _chainId: this.chainId }
           success = await this.pollTxStatus(args)
           console.log('got tx success', success)
         } catch (e) {
@@ -1374,6 +1388,7 @@ export default {
             const url = new URL(args._relayerEndpoint)
             url.pathname = '/status'
             url.searchParams.append('tx', args.hash)
+            url.searchParams.append('chainId', args._chainId)
 
             const resp = await fetch(url)
             const json = await resp.json()
