@@ -24,8 +24,7 @@ This is an alternative frontend for [Ambient Finance](https://ambient.finance) t
 
 ## TODO
 * Limit orders
-* Deposits with permit support
-* Deadline for signed commands
+* Concentrated LP management/creation
 * Self hosted indexer and graph node
 
 ## Attributions

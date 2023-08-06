@@ -94,6 +94,7 @@ function verifyDomainHash(name, version, chainId, token, expectedDomainHash) {
 // absolute clown behavior.
 // Correcty guesses: USDC, UNI, 1inch, stETH, wstETH, MNT, ARB, stkAAVE, XAUt, frxETH, sfrxETH, LUSD, R, RSR
 // Incorrect: wNXM (no version() and no domainHash()), GRT (has salt), TRX and USDD (non-EIP2612), BUSD and USDP (non-EIP2612)
+// No support for DAI and RAI because they use the old permit format with bool instead of quantity.
 function guessDomain(name, version, chainId, token, domainHash) {
   console.log('guessing', name, version, chainId, token, domainHash)
   if (version) {

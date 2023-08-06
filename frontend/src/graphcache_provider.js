@@ -52,6 +52,7 @@ export class GraphcacheProvider {
         err = e
         console.error('graphcache fetch error', e)
         this.selected_provider_index = (this.selected_provider_index + 1) % GRAPHCACHE_PROVIDERS.length
+        await new Promise((resolve) => setTimeout(resolve, 500))
       }
     }
     console.error('ran out of providers, throwing')

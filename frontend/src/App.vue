@@ -51,7 +51,7 @@
               }}</a>
             </div>
             <span v-else-if="status === true" class="text-center text-success" style="padding-bottom: 0.5em;">
-              Transaction succeeded
+              Transaction confirmed
               <a :href="txLink(hash)" target="_blank">{{
                 shortHash(hash)
               }}</a>
@@ -75,11 +75,13 @@
           :address="address" :balances="balances" :tokens="TOKENS[chainId]" :positions="positions" :pools="pools"
           :refreshing="refreshing" @refresh="refreshData" @withdraw="(a) => setWithdrawTarget(a, true)"
           @transfer="(a) => setWithdrawTarget(a, false)" @removeLp="setRemoveLp" />
+        <!-- there were too many props ten props ago -->
         <ActionInput class="main-panel border shadow-sm rounded" style="height: auto; width: inherit" ref="actionInput"
           @perform="performAction" @fetchToken="a => fetchTokenInfo(a, true)"
-          @fetchWalletBalance="a => fetchWalletBalance(a)" :fetchSwapOutput="fetchSwapOutput" :pools="pools"
+          @fetchWalletBalance="a => fetchWalletBalance(a)" @approve="sendApproveTx" :fetchSwapOutput="fetchSwapOutput" :pools="pools"
           :tokens="TOKENS[chainId]" :coldTokens="COLD_TOKENS" :balances="balances" :walletBalances="walletBalances"
-          :address="address" :signing="signing" :canSign="canSign" :crocChain="CHAINS[chainId]" />
+          :allowances="allowances" :address="address" :signing="signing" :canSign="canSign"
+          :crocChain="CHAINS[chainId]" />
       </div>
       <!-- this should obviously be its own component but i'm too tired of dealing with Vue at this point -->
       <div ref="signedCmdsPanel" v-if="Object.keys(signed.options).length > 0" id="signed-cmds-panel"
@@ -246,7 +248,7 @@ const RELAYERS = {
   }
 }
 
-// approximate amount of gas that adding a tip costs (since it's not possible to estimate gas with a tip)
+// approximate amount of gas that adding a tip costs (since it's not possible to estimate gas with a tip). it also depends on the token?
 const RELAYER_GAS_TIP_MARKUP = 15000n
 
 const REFRESH_PERIOD = 30000
@@ -289,6 +291,7 @@ export default {
       positions: {},
       balances: {},
       walletBalances: {},
+      allowances: {},
       pools: {},
       signed: {
         selected: null,
@@ -375,6 +378,11 @@ export default {
         this.$refs.actionInput.$el.scrollIntoView({ behavior: 'smooth', block: 'start' })
       })
     },
+    slp: async function (ms) {
+      await new Promise(resolve => setTimeout(resolve, ms));
+      console.log(ms * 2)
+      return ms * 10
+    },
     performAction: async function (actionInput) {
       console.log('performing', actionInput)
       console.log(dump(actionInput))
@@ -393,8 +401,12 @@ export default {
         } else if (action._type == 'swap') {
           cmd = this.buildSwapCmd(action)
         } else if (action._type == 'deposit') {
-          action.permit = await this.getDepositPermit(action)
-          cmd = this.buildDepositCmd(action)
+          if (action._gasless) {
+            action.permit = await this.getDepositPermit(action)
+            cmd = this.buildDepositWithPermitCmd(action)
+          } else {
+            cmd = this.buildDepositCmd(action)
+          }
         } else {
           throw "Can't perform this action"
         }
@@ -402,7 +414,7 @@ export default {
         if (action._gasless != true) {
           let hash;
           if (action._type != 'swap' || (action._gasless && LONG_PATH_SWAP))
-            hash = await this.sendUserTx(cmd)
+            hash = await this.sendUserCmdTx(cmd)
           else
             hash = await this.sendSwapTx(cmd)
           console.log(hash)
@@ -417,8 +429,15 @@ export default {
         }
       } catch (e) {
         console.error('performAction error', e)
-        if (!(e.prototype instanceof UserRejectedRequestError) && !(e.name == 'UserRejectedRequestError')) {
+        // console.log(e.name)
+        // console.log(e.message)
+        // console.log(e.cause)
+        // console.log(e.details)
+        if (!(e.prototype instanceof UserRejectedRequestError) && !(e.name == 'UserRejectedRequestError') && (e.message && !e.message.startsWith('User rejected'))) {
           Sentry.captureException(e)
+          this.showToast('Command exception', e.toString(), 'danger')
+        } else if (typeof (e) == 'string') {
+          this.showToast('Command exception', e, 'danger')
         }
       }
       this.signing = false
@@ -431,7 +450,6 @@ export default {
       const callpath = 1
       const cmd = encodeAbiParameters(
         [
-          // { name: 'callpath', type: 'uint8' },
           { name: 'base', type: 'address' },
           { name: 'quote', type: 'address' },
           { name: 'poolIdx', type: 'uint256' },
@@ -542,11 +560,47 @@ export default {
       console.log('permit', permit)
       return permit
     },
+    sendApproveTx: async function (tokenAddr, qty) {
+      if (tokenAddr == ZERO_ADDRESS)
+        return
+      const client = getPublicClient()
+      const call = {
+        address: tokenAddr, abi: [{ "constant": false, "inputs": [{ "name": "_spender", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "approve", "outputs": [], "payable": false, "stateMutability": "nonpayable", "type": "function" }, { "constant": true, "inputs": [], "name": "deprecated", "outputs": [{ "name": "", "type": "bool" }], "payable": false, "stateMutability": "view", "type": "function" }],
+        functionName: "allowance", args: [this.address, CROC_CHAINS[this.chainId].addrs.dex, qty],
+        account: this.account
+      }
+      try {
+        const client = getPublicClient()
+        const sim = await client.simulateContract(call)
+        console.log('sim', sim)
+        const wallet = await getWalletClient({ chainId: this.chainId })
+        const hash = await wallet.writeContract(sim.request)
+        await this.waitForHash(hash)
+      } catch (e) {
+        console.error('sendApproveTx error', e)
+        // this.showToast('Send TX error', e.toString(), 'danger')
+        // throw e
+      }
+    },
     buildDepositCmd: function (action) {
+      const callpath = CROC_CHAINS[this.chainId].depositCallpath
+
+      const cmd = encodeAbiParameters(
+        [
+          { name: 'cmd', type: 'uint8' },
+          { name: 'recv', type: 'address' },
+          { name: 'value', type: 'uint128' },
+          { name: 'token', type: 'address' },
+        ],
+        [73, action.recv, action._qtyRaw, action.token]
+      )
+      return { callpath, cmd, _action: action, value: action.token == ZERO_ADDRESS ? action._qtyRaw : 0n }
+    },
+    buildDepositWithPermitCmd: function (action) {
       const callpath = CROC_CHAINS[this.chainId].depositPermitCallpath
 
-      console.log([83, action.recv, action._qtyRaw, action.token, action.permit.deadline,
-        action.permit.v, action.permit.r, action.permit.s])
+      // console.log([83, action.recv, action._qtyRaw, action.token, action.permit.deadline,
+      //   action.permit.v, action.permit.r, action.permit.s])
       const cmd = encodeAbiParameters(
         [
           { name: 'cmd', type: 'uint8' },
@@ -630,31 +684,17 @@ export default {
         return signedCmd
       } catch (e) {
         // console.error('signCmd exception', e)
-        this.showToast('Signing exception', e.toString(), 'danger')
+        // this.showToast('Signing exception', e.toString(), 'danger')
         throw e
       }
     },
-    sendUserTx: async function (cmd) {
-      console.log('sendUserTx', cmd)
+    sendUserCmdTx: async function (cmd) {
+      console.log('sendUserCmdTx', cmd)
       try {
         const client = getPublicClient()
         const sim = await client.simulateContract({
-          functionName: 'userCmd', args: [cmd.callpath, cmd.cmd],
-          // functionName: 'userCmd', args: [cmd.cmd],
+          functionName: 'userCmd', args: [cmd.callpath, cmd.cmd], value: cmd.value,
           address: CROC_CHAINS[this.chainId].addrs.dex, abi: CROC_ABI,
-          // address: '0x37e00522Ce66507239d59b541940F99eA19fF81F', abi: [{
-          //   "inputs": [
-          //     {
-          //       "internalType": "bytes",
-          //       "name": "cmd",
-          //       "type": "bytes"
-          //     }
-          //   ],
-          //   "name": "userCmd",
-          //   "outputs": [],
-          //   "stateMutability": "payable",
-          //   "type": "function"
-          // }],
           account: this.account
         })
         console.log('sim', sim)
@@ -662,7 +702,7 @@ export default {
         return await wallet.writeContract(sim.request)
       } catch (e) {
         console.error('sendUserTx error', e)
-        this.showToast('Send TX error', e.toString(), 'danger')
+        // this.showToast('Send TX error', e.toString(), 'danger')
         throw e
       }
     },
@@ -705,7 +745,7 @@ export default {
         return await wallet.writeContract(sim.request)
       } catch (e) {
         console.error('sendUserTx error', e)
-        this.showToast('Send TX error', e.toString(), 'danger')
+        // this.showToast('Send TX error', e.toString(), 'danger')
         throw e
       }
     },
@@ -1035,6 +1075,9 @@ export default {
       // const refreshables = [await this.fetchSurpluses(this.address, [], true),]
       if (this.signed.selected) {
         refreshables.push(this.estimateTips(this.signed.options.find(o => o.sig == this.signed.selected)))
+        // i'm tired of writing multicalls, let batching do the work for once
+        for (const token of Object.keys(this.allowances))
+          refreshables.push(this.fetchTokenAllowance(token))
       }
       try {
         await Promise.all(refreshables)
@@ -1205,8 +1248,7 @@ export default {
       const balanceReq = { address: this.address }
       if (tokenAddr != ZERO_ADDRESS)
         balanceReq.token = tokenAddr
-      const [_, wagmiBalance] = await Promise.all([this.fetchTokenInfo(tokenAddr, false), fetchBalance(balanceReq)])
-      console.log('wagmi balance', wagmiBalance)
+      const [_, wagmiBalance] = await Promise.all([this.fetchTokenInfo(tokenAddr, false), fetchBalance(balanceReq), this.fetchTokenAllowance(tokenAddr)])
       const balance = {
         raw: wagmiBalance.value,
         string: wagmiBalance.formatted,
@@ -1214,7 +1256,22 @@ export default {
         human: getFormattedNumber(parseFloat(wagmiBalance.formatted)),
       }
       this.$set(this.walletBalances, tokenAddr, balance)
-      console.log('bal', this.walletBalances[tokenAddr])
+    },
+    fetchTokenAllowance: async function (tokenAddr) {
+      if (tokenAddr == ZERO_ADDRESS)
+        return
+      const client = getPublicClient()
+      const call = {
+        address: tokenAddr, abi: [{ "constant": true, "inputs": [{ "name": "_owner", "type": "address" }, { "name": "_spender", "type": "address" }], "name": "allowance", "outputs": [{ "name": "", "type": "uint256" }], "payable": false, "stateMutability": "view", "type": "function" }],
+        functionName: "allowance", args: [this.address, CROC_CHAINS[this.chainId].addrs.dex]
+      }
+      try {
+        const allowance = await client.readContract(call)
+        this.$set(this.allowances, tokenAddr, allowance)
+      } catch (e) {
+        console.error('allowance fetch error', e)
+      }
+      console.log('allowances', dump(this.allowances))
     },
     // fetches DEX balances either for given tokens, or tokens from the indexer, and optionally adds all current balances to either list
     fetchSurpluses: async function (owner, tokens = [], includeKnownBalances = false) {
@@ -1244,7 +1301,6 @@ export default {
             balance.string = formatUnits(balance.raw, token.decimals)
             balance.float = parseFloat(balance.string)
             balance.human = getFormattedNumber(balance.float)
-            // if (balance.raw > 0)
             this.$set(this.balances, tokenAddr, balance)
           } catch (e) {
             console.error('surplus fetch error', e)

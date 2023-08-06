@@ -72,8 +72,8 @@ export const TOKENS = {
             "chainId": 5,
             "logoURI": "https://assets.coingecko.com/coins/images/6319/thumb/USD_Coin_icon.png"
         },
-        "0xdc31Ee1784292379Fbb2964b3B9C4124D8F89C60": {
-            "address": "0xdc31Ee1784292379Fbb2964b3B9C4124D8F89C60",
+        "0xdc31ee1784292379fbb2964b3b9c4124d8f89c60": {
+            "address": "0xdc31ee1784292379fbb2964b3b9c4124d8f89c60",
             "chainId": 1,
             "decimals": 18,
             "logoURI": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x6B175474E89094C44Da98b954EedeAC495271d0F/logo.png",

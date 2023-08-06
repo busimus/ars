@@ -29,7 +29,7 @@ const RELAY_SPEC = {
   },
   tipRecv: [numberToHex(256, { size: 20 }), '0x09784d03b42581cfc4fc90a7ab11c3125dedeb86', '0xb4fdaf8e6636e7394f6ae768c5fa9d2e5bf6f0dc'],
   tipThreshold: 0.9,  // actual tip must at least cover this amount of gasFee
-  maxFeePerGasIncrease: 1.25,  // multiplies current gas by this
+  maxFeePerGasIncrease: {1: 1.25, 5: 5},  // multiplies current gas by this number, based on chainId
 }
 
 const ALREADY_SENT = {}
@@ -179,7 +179,7 @@ async function sendRelayerTx(cmd, maxFeePerGas) {
   const client = CLIENTS[cmd.chainId].client
   const wallet = CLIENTS[cmd.chainId].wallet
   try {
-    const maxPriorityFeePerGas = parseGwei('0.5')
+    const maxPriorityFeePerGas = parseGwei('0.35') // # TODO: this sucks
     const sim = await client.simulateContract({
       functionName: 'userCmdRelayer', args: [cmd.callpath, cmd.cmd, cmd.conds, cmd.tip, cmd.sig],
       address: CROC_CHAINS[cmd.chainId].addrs.dex, abi: CROC_ABI,
@@ -217,7 +217,7 @@ async function relay(cmd) {
       return resp
     }
 
-    const maxFeePerGas = BigInt(parseInt(parseInt(gasNow) * RELAY_SPEC.maxFeePerGasIncrease))
+    const maxFeePerGas = BigInt(parseInt(parseInt(gasNow) * RELAY_SPEC.maxFeePerGasIncrease[cmd.chainId]))
     console.log('gasNow', gasNow, 'maxFeePerGas', maxFeePerGas)
     // throw "bad"
     const hash = await sendRelayerTx(cmd, maxFeePerGas)

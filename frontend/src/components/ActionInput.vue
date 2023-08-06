@@ -43,7 +43,8 @@
         <div style="display: flex; gap: 0.4rem">
           <!-- horrible prop binding because v-model:address doesn't work -->
           <AddressInput :address="action.recv" @update:address="a => action.recv = a" :name="'withdraw-recv'"
-            :placeholder="'Defaults to connected address'" :description="'Where tokens will be sent'" :tokens="tokens" :required="false" />
+            :placeholder="'Defaults to connected address'" :description="'Where tokens will be sent'" :tokens="tokens"
+            :required="false" />
           <!-- disgusting style, revolting -->
           <b-button style="height: fit-content;" class="input-like" @click="setRecvToSelf"
             title="Use currently connected address"><b-icon-wallet-2 /></b-button>
@@ -108,10 +109,10 @@
             :cold_tokens="coldTokens" :balances="walletBalances" @fetchToken="t => $emit('fetchWalletBalance', t)" />
         </div>
         <div style="margin-top: 1rem">
-          <b-alert v-if="action._gasless && action.token == ZERO_ADDRESS" variant="danger" show
-            style="margin-bottom: 0rem" class="smaller-alert">ETH doesn't support
+          <b-alert v-if="action._gasless && NO_PERMIT_SUPPORT.includes(action.token)" variant="danger" show
+            class="smaller-alert">{{ this.tokens[action.token].symbol }} doesn't support
             gasless deposits</b-alert>
-          <b-alert v-else-if="action._gasless" variant="warning" show style="margin-bottom: 0rem"
+          <b-alert v-else-if="action._gasless && !PERMIT_SUPPORT.includes(action.token)" variant="warning" show
             class="smaller-alert">Some tokens don't
             support gasless
             deposits. <a href="#" @click.prevent="$refs['gasless-deposits-modal'].show()">See list</a></b-alert>
@@ -153,7 +154,7 @@
           <b-form-group id="input-group-removeLp-qtyPct" :label="'Amount: ' + action._qtyPct + '%'"
             label-for="input-removeLp-qtyPct" style="flex: 2;" required>
             <b-form-input id="input-removeLp-qtyPct" v-model="action._qtyPct" placeholder="0" type="range" min=1 max=100
-              style="margin-top: 0.5rem" required></b-form-input>
+              style="margin-top: 0.5rem; background-color: inherit !important;" required></b-form-input>
           </b-form-group>
           <b-form-group id="input-group-removeLp-slippage" label="Slippage %" label-for="input-removeLp-slippage"
             style="flex: 1" required>
@@ -176,10 +177,9 @@
           </div>
         </div>
       </div>
-      <br />
-      <div style="display: flex; justify-content: center;">
-        <b-form-checkbox id="checkbox-relayer" v-if="actionType" v-model="action._gasless" name="checkbox-relayer"
-          switch size="lg">
+      <div style="display: flex; justify-content: center; margin-top: 0.7rem">
+        <b-form-checkbox id="checkbox-gasless" v-if="actionType" v-model="action._gasless" name="checkbox-gasless" switch
+          size="lg">
           Gasless
         </b-form-checkbox>
         <b-icon-question-circle id="gaslessQuestion" style="margin: 0.5rem 0 0 0.5rem" />
@@ -195,22 +195,9 @@
         <div v-else-if="!signing">{{ action._gasless ? 'Sign' : 'Send' }}</div>
       </b-button>
     </b-form>
-    <b-modal
-        ref="gasless-deposits-modal"
-        title="Gasless deposit support"
-        ok-only
-        ok-variant="primary"
-        size="lg"
-        centered
-      >
-        <b-form-textarea
-          id="gasless-tokens-textarea"
-          v-model="GASLESS_TOKENS"
-          readonly
-          rows="7"
-          wrap="soft"
-        />
-      </b-modal>
+    <b-modal ref="gasless-deposits-modal" title="Gasless deposit support" ok-only ok-variant="primary" size="lg" centered>
+      <b-form-textarea id="gasless-tokens-textarea" v-model="GASLESS_DEPOSIT_INFO" readonly rows="7" wrap="soft" />
+    </b-modal>
 
   </div>
 </template>
@@ -248,10 +235,14 @@ import { isValidAddress, lpBaseTokens, lpQuoteTokens, poolKey } from '../utils.j
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
-const GASLESS_TOKENS = `Tokens with confirmed support for gasless deposits:
-USDC, UNI, stETH, wstETH, LUSD, R, RSR, ARB, 1INCH, and a few others.
+const GASLESS_DEPOSIT_INFO = `Tokens with confirmed support for gasless deposits:
+USDC, UNI, stETH, wstETH, LUSD, R, RSR, ARB, 1INCH.
 
 If the token you're interested in isn't listed then try it anyway – if you can create a signed deposit command without errors then it's supported.`
+
+// good stuff
+const PERMIT_SUPPORT = ["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984", "0x17144556fd3424edc8fc8a4c940b2d04936d17eb", "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0", "0x5f98805a4e8be255a32880fdec7f6728c6568ba0", "0x320623b8e4ff03373931769a31fc52a4e78b5d70", "0x183015a9ba6ff60230fdeadc3f43b3d788b13e21", "0x111111111117dc0aa78b770fa6a738034120c302", "0xb50721bcf8d664c30412cfbc6cf7a15145234ad1"]
+const NO_PERMIT_SUPPORT = ["0x0000000000000000000000000000000000000000", "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", "0x6982508145454ce325ddbe47a25d4ec3d2311933", "0x6b175474e89094c44da98b954eedeac495271d0f", "0xdc31ee1784292379fbb2964b3b9c4124d8f89c60", "0xc04b0d3107736c32e19f1c62b2af67be61d63a05", "0xdac17f958d2ee523a2206206994597c13d831ec7", "0x5a98fcbea516cf06857215779fd812ca3bef1b32", "0x72e4f9f808c49a2a61de9c5896298920dc4eeea9", "0x03ab458634910aad20ef5f1c8ee96f1d6ac54919"]
 
 export default {
   name: "ActionInput",
@@ -281,27 +272,26 @@ export default {
   data: function () {
     return {
       action: { ...COMMANDS['swap'] },
-      // action: { "_type": "swap", "text": "Swap", "base": null, "quote": null, "poolIdx": null, "isBuy": null, "qty": "1000000000", "tip": { "token": null, "amount": null }, "limitPrice": null, "minOut": "69", "settleFlags": 3, "_toToken": "0x0000000000000000000000000000000000000000", "_fromQty": "1000", "_fromQtyRaw": "1000000000", "_fromToken": "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "_toQty": "0.520679069963617198", "_toQtyRaw": 0, "_slippage": 1, "_estimate": { "success": true, "output": "520679069963617198", "minOut": "515472279263981027", "priceAfter": "421011948436206964806132", "slipDirection": -1, "args": { "base": "0x0000000000000000000000000000000000000000", "quote": "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "poolIdx": 36000, "isBuy": false, "inBaseQty": false, "qty": "1000000000", "tip": 0, "limitPrice": "65537" } }, "_descripnion": "Unknown command", "_gasless": true, "_relayerAddr": null, "_relayManually": false, "_selectedRelayer": "bus", "_selectedTipToken": null, "_tipEstimates": { "null": { "text": "No estimate yet", "value": null, "amount": 0 } }, "_gasPrice": null, "_description": "Swap: 1,000.00 USDC for ETH" },
       swapDebouncer: 0,
       swapOutput: 0,
       swapPriceAfter: 0,
       invertSwapIcon: false,
-      // actionType: swap,
-      // action: { ...COMMANDS["removeConcLp"] },
-      // actionType: "removeConcLp",
       COMMANDS,
       ZERO_ADDRESS,
       SETTLE_FLAGS,
-      GASLESS_TOKENS,
+      GASLESS_DEPOSIT_INFO,
+      PERMIT_SUPPORT,
+      NO_PERMIT_SUPPORT,
     };
   },
-  emits: ['perform', 'fetchToken'],
+  emits: ['perform', 'fetchToken', 'fetchWalletBalance', 'approve'],
   props: {
     pools: Object,
     tokens: Object,
     coldTokens: Object,
     balances: Object,
     walletBalances: Object,
+    allowances: Object,
     address: String,
     crocChain: Object,
     signing: Boolean,
@@ -412,13 +402,13 @@ export default {
     setSwapToken: function (side, address) {
       console.log('side', address, this.action._fromToken, this.action._toToken)
       if (side == 'from') {
-        console.log('f', this.action._toToken == address)
+        // console.log('f', this.action._toToken == address)
         if (this.action._toToken == address)
           return
         this.action._fromQty = null
         this.action._fromToken = address
       } else if (side == 'to') {
-        console.log('t', this.action._toToken == address)
+        // console.log('t', this.action._toToken == address)
         if (this.action._fromToken == address)
           return
         this.action._toQty = null
@@ -544,8 +534,11 @@ export default {
         this.action = cloneDeep(COMMANDS[actionType])
       }
     },
-    actionImpossible: function() {
-      if (this.actionType == 'deposit' && this.action._gasless && this.action.token == ZERO_ADDRESS)
+    actionImpossible: function () {
+      if (this.actionType == 'deposit' && this.action._qtyRaw > this.walletBalances[this.action.token])
+        if (this.actionType == 'deposit' && this.action._gasless && NO_PERMIT_SUPPORT.includes(this.action.token))
+          return true
+      if (this.actionType == 'deposit' && !this.action._gasless && this.action._qtyRaw > this.allowances[this.action.token])
         return true
     },
     poolFilled: function () {

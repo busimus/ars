@@ -47,7 +47,7 @@ export const COMMANDS = {
   },
   withdraw: {
     _type: 'withdraw',
-    text: 'Withdraw DEX balance',
+    text: 'Withdraw',
     recv: null,
     qty: null, // human string with decimal point
     token: null,
@@ -65,7 +65,7 @@ export const COMMANDS = {
   },
   deposit: {
     _type: 'deposit',
-    text: 'Deposit to DEX balance',
+    text: 'Deposit',
     recv: null,
     qty: null, // human string with decimal point
     token: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
