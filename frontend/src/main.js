@@ -23,14 +23,6 @@ Sentry.init({
     // returning null to not send any additional data for privacy reasons
     return null
   },
-  // beforeSend: function (event, hint) {
-  //   const error = hint.originalException;
-  //   console.log(event, hint, error)
-  //   if (error && error.message && error.message.match(/WebSocket connection failed/i)) {
-  //     return null
-  //   }
-  //   return event;
-  // },
 });
 
 

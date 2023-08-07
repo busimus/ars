@@ -10,6 +10,8 @@ const BASE_COMMAND = {
   _relayManually: false,
   _selectedRelayer: 'bus',
   _selectedTipToken: null,
+  _baseSurplus: true,
+  _quoteSurplus: true,
   _tipEstimates: { null: { text: 'No estimate yet', value: null, amount: 0 } },
   _gasPrice: null,
   tip: {
@@ -54,15 +56,6 @@ export const COMMANDS = {
     _qtyRaw: null,
     ...cloneDeep(BASE_COMMAND),
   },
-  transfer: {
-    _type: 'transfer',
-    text: 'Transfer to different DEX balance',
-    recv: null,
-    qty: null, // human string with decimal point
-    token: null,
-    _qtyRaw: null,
-    ...cloneDeep(BASE_COMMAND),
-  },
   deposit: {
     _type: 'deposit',
     text: 'Deposit',
@@ -70,6 +63,15 @@ export const COMMANDS = {
     qty: null, // human string with decimal point
     token: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
     permit: null,
+    _qtyRaw: null,
+    ...cloneDeep(BASE_COMMAND),
+  },
+  transfer: {
+    _type: 'transfer',
+    text: 'Transfer to different DEX balance',
+    recv: null,
+    qty: null, // human string with decimal point
+    token: null,
     _qtyRaw: null,
     ...cloneDeep(BASE_COMMAND),
   },
@@ -117,28 +119,7 @@ export const COMMANDS = {
   },
 }
 
-// no need for proper bitflags yet
 export const SETTLE_TO_WALLET = 0
 export const BASE_TO_DEX = 1
 export const QUOTE_TO_DEX = 2
 export const SETTLE_TO_DEX = 3
-
-// no need for proper bitflags yet
-export const SETTLE_FLAGS = [
-  {
-    value: SETTLE_TO_WALLET,
-    text: 'To wallet',
-  },
-  //  1: {
-  //    value: 1,
-  //    text: 'Base to DEX balance',
-  //  },
-  //  2: {
-  //    value: 2,
-  //    text: 'Quote to DEX balance',
-  //  },
-  {
-    value: SETTLE_TO_DEX,
-    text: 'To DEX balance',
-  },
-]

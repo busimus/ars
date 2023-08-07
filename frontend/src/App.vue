@@ -24,7 +24,6 @@
         <hr style="margin-top: 0rem; margin-bottom: 0.5rem" />
 
         <div id="w3-button-container">
-          <!-- <w3m-core-button balance="show" name="wallet_button"></w3m-core-button> -->
           <div v-if="!address">
             <b-button variant="primary" @click="w3modal">Connect wallet</b-button>
             <hr style="margin-top: 0.5rem; margin-bottom: 0.5rem" />
@@ -808,11 +807,12 @@ export default {
 
       // if swapping to tipped token and settling it to DEX
       if (a._type == 'swap' && a._toToken == tip.token && a._estimate.minOut >= tip.amount) {
-        if (scmd.settleFlags == SETTLE_TO_DEX) {
+        console.log('swap to tip', scmd)
+        if (scmd._action.settleFlags == SETTLE_TO_DEX) {
           return true
-        } else if (scmd.settleFlags == BASE_TO_DEX && a._toToken == a._estimate.args.base) {
+        } else if (scmd._action.settleFlags == BASE_TO_DEX && a._toToken == a._estimate.args.base) {
           return true
-        } else if (scmd.settleFlags == QUOTE_TO_DEX && a._toToken == a._estimate.args.quote) {
+        } else if (scmd._action.settleFlags == QUOTE_TO_DEX && a._toToken == a._estimate.args.quote) {
           return true
         }
       }
@@ -1539,9 +1539,6 @@ export default {
     },
   },
   mounted: function () {
-    // if (!localStorage.termsAccepted)
-    //   this.$refs["warning-modal"].show();
-
     watchAccount((account) => this.accountChanged(account))
     watchNetwork((network) => this.networkChanged(network))
     if (this.refreshTicker == null)
@@ -1565,13 +1562,6 @@ export default {
 </script>
 
 <style lang="scss">
-// // Your variable overrides
-// $body-bg: #000;
-
-// // Bootstrap and its default variables
-// @import '../node_modules/bootstrap/scss/bootstrap';
-// // BootstrapVue and its default variables
-// @import '../node_modules/bootstrap-vue/src/index.scss';
 @import 'node_modules/@forevolve/bootstrap-dark/scss/bootstrap-dark.scss';
 
 $bg: #0d1117;
@@ -1621,7 +1611,6 @@ w3m-balance {
 .main-panel {
   padding: 1rem 1rem 1em 1em;
   background-color: lighten($bg, 3%);
-  // margin-bottom: 0.5em;
   max-width: 22rem;
 }
 

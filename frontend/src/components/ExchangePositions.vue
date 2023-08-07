@@ -62,7 +62,7 @@
           <th>Pair</th>
           <th>Amounts</th>
           <!-- <th></th> -->
-          <th colspan="2">Range</th>
+          <th colspan="2">Price range</th>
         </tr>
       </thead>
       <tr v-for="(pos, posId) in positions">

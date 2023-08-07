@@ -121,10 +121,10 @@
       <div v-else-if="actionType == 'removeConcLp' || actionType == 'removeAmbLp'">
         <b-form-group>
           <div style="display: flex; gap: 0.4rem">
-            <CoinSelector :label="'Base token'" :address="action.base" @update:address="a => { action.base = a }"
+            <CoinSelector :label="'Base token'" :address="action.base" @update:address="a => { action.base = a }" :useSurplus="action._baseSurplus" :surplusDirection="'to'" @update:useSurplus="u => { action._baseSurplus = u }"
               :tokens="tokens" :cold_tokens="coldTokens" :balances="balances" @fetchToken="t => $emit('fetchToken', t)"
               style="flex: 1" />
-            <CoinSelector :label="'Quote token'" :address="action.quote" @update:address="a => { action.quote = a }"
+            <CoinSelector :label="'Quote token'" :address="action.quote" @update:address="a => { action.quote = a }" :useSurplus="action._quoteSurplus" :surplusDirection="'to'" @update:useSurplus="u => { action._quoteSurplus = u }"
               :tokens="tokens" :cold_tokens="coldTokens" :balances="balances" @fetchToken="t => $emit('fetchToken', t)"
               style="flex: 1" />
           </div>
@@ -139,7 +139,7 @@
             <b-form-input id="input-removeLp-askTick" v-model="action.askTick" placeholder="0" required></b-form-input>
           </b-form-group>
         </div>
-        <div style="display: flex; gap: 0.4rem">
+        <!-- <div style="display: flex; gap: 0.4rem">
           <b-form-group id="input-group-removeLp-poolIdx" label="Pool index" label-for="input-removeLp-poolIdx"
             style="flex: 1;" required>
             <b-form-input id="input-removeLp-poolIdx" v-model="action.poolIdx" placeholder="420" required></b-form-input>
@@ -149,7 +149,7 @@
             <b-form-select id="input-removeLp-settleFlags" v-model="action.settleFlags" :options="SETTLE_FLAGS"
               required></b-form-select>
           </b-form-group>
-        </div>
+        </div> -->
         <div style="display: flex; gap: 0.4rem">
           <b-form-group id="input-group-removeLp-qtyPct" :label="'Amount: ' + action._qtyPct + '%'"
             label-for="input-removeLp-qtyPct" style="flex: 2;" required>
@@ -230,8 +230,9 @@ import cloneDeep from "lodash.clonedeep";
 import { parseUnits, formatUnits } from "viem"
 import { fromDisplayPrice, encodeCrocPrice } from '@crocswap-libs/sdk'
 import { getFormattedNumber } from "../number_formatting.jsx"
-import { COMMANDS, SETTLE_FLAGS } from '../dex_actions.jsx'
+import { COMMANDS } from '../dex_actions.jsx'
 import { isValidAddress, lpBaseTokens, lpQuoteTokens, poolKey } from '../utils.jsx'
+import { SETTLE_TO_WALLET, BASE_TO_DEX, QUOTE_TO_DEX, SETTLE_TO_DEX } from "../dex_actions";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
@@ -278,7 +279,6 @@ export default {
       invertSwapIcon: false,
       COMMANDS,
       ZERO_ADDRESS,
-      SETTLE_FLAGS,
       GASLESS_DEPOSIT_INFO,
       PERMIT_SUPPORT,
       NO_PERMIT_SUPPORT,
@@ -471,9 +471,8 @@ export default {
         } else if (['removeConcLp', 'removeAmbLp'].indexOf(this.actionType) != -1) {
           const amtBase = `${this.lpRemovedBaseTokens} ${this.tokens[a.base].symbol}`
           const amtQuote = `${this.lpRemovedQuoteTokens} ${this.tokens[a.quote].symbol}`
-          let dest = SETTLE_FLAGS.find(f => f.value == a.settleFlags).text
-          dest = dest.charAt(0).toLowerCase() + dest.substring(1)
-          a._description = `Remove LP: ${amtBase} + ${amtQuote} ${dest}`
+          const settlement = this.describeSettlement(a)
+          a._description = `Remove LP: ${amtBase} + ${amtQuote}${settlement}`
         } else if (this.actionType == 'swap') {
           const reformatted = formatUnits(a._fromQtyRaw, this.tokens[a._fromToken].decimals)
           const qty = getFormattedNumber(parseFloat(reformatted))
@@ -483,6 +482,25 @@ export default {
         }
       } catch (e) {
         console.error('describe error', e)
+      }
+    },
+    describeSettlement: function(action) {
+      if (['removeConcLp', 'removeAmbLp'].indexOf(this.actionType) != -1) {
+        const base = this.tokens[action.base].symbol
+        const quote = this.tokens[action.quote].symbol
+        if ((action.settleFlags & 0b00000011) == SETTLE_TO_DEX) {
+          return " to DEX balance"
+        } else if ((action.settleFlags & 0b00000011) == SETTLE_TO_WALLET) {
+          return " to wallet"
+        } else if ((action.settleFlags & 0b00000011) == BASE_TO_DEX) {
+          return `, ${base} to DEX and ${quote} to wallet`
+        } else if ((action.settleFlags & 0b00000011) == QUOTE_TO_DEX) {
+          return `, ${quote} to DEX and ${base} to wallet`
+        } else {
+          console.error(action.settleFlags, action.settleFlags & 0b00000011)
+        }
+      } else {
+        throw `Can't describe settlement for ${this.actionType}`
       }
     },
     perform: function (event) {
@@ -501,6 +519,11 @@ export default {
       } else if (this.actionType == 'withdraw') {
         if (!this.action.recv)
           this.action.recv = this.address
+      }
+
+      if (this.action.settleFlags != undefined) {
+        this.action.settleFlags = (this.action._baseSurplus ? 1 : 0) | (this.action._quoteSurplus ? 2 : 0)
+        console.log('flags', this.action.settleFlags)
       }
 
       this.describe()
