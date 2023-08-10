@@ -61,7 +61,6 @@
         <tr>
           <th>Pair</th>
           <th>Amounts</th>
-          <!-- <th></th> -->
           <th colspan="2">Price range</th>
         </tr>
       </thead>
@@ -151,9 +150,6 @@ export default {
       return lpQuoteTokens(pos, pool, 100, true)
     },
     rangePrice: function (pos, side) {
-      // const pool = this.pools[poolKey(pos)]
-      // if (!pool)
-      //   return '...'
       if (pos.positionType == 'ambient')
         return side == 'min' ? '0' : '∞'
       const tick = pos[side == 'min' ? 'askTick' : 'bidTick']

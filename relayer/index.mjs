@@ -3,11 +3,11 @@ import cors from 'cors';
 import morgan from 'morgan';
 import fs from 'fs';
 
-import { configureChains, createConfig, getPublicClient, getWalletClient } from '@wagmi/core'
+import { configureChains, createConfig } from '@wagmi/core'
 // import { mainnet, goerli } from '@wagmi/core/chains'
 import { mainnet, goerli } from 'viem/chains'
 import { publicProvider } from '@wagmi/core/providers/public'
-import { createPublicClient, createWalletClient, encodeAbiParameters, decodeAbiParameters, numberToHex, http, hexToBigInt, parseGwei } from 'viem';
+import { createPublicClient, createWalletClient, decodeAbiParameters, numberToHex, http, hexToBigInt, parseGwei } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { CROC_CHAINS } from './constants.mjs'
@@ -17,7 +17,7 @@ import { decodeCrocPrice } from './utils.mjs';
 
 
 const TRANSPORTS = {
-  1: { http: http("https://rpc.flashbots.net/?hint=calldata&hint=logs&hint=hash"), tx: http("https://rpc.flashbots.net/?hint=calldata&hint=logs&hint=hash"), chain: mainnet },
+  1: { http: http("https://rpc.flashbots.net/?builder=flashbots&builder=f1b.io&builder=rsync&builder=beaverbuild.org&builder=builder0x69&builder=titan&builder=eigenphi&builder=boba-builder"), tx: http("https://rpc.flashbots.net/?builder=flashbots&builder=f1b.io&builder=rsync&builder=beaverbuild.org&builder=builder0x69&builder=titan&builder=eigenphi&builder=boba-builder"), chain: mainnet },
   5: { http: http("https://goerli.infura.io/v3/afea1acbc0be4ad7bf22a841a0e7ef63"), tx: http("https://goerli.infura.io/v3/afea1acbc0be4ad7bf22a841a0e7ef63"), chain: goerli },
 }
 
@@ -28,7 +28,7 @@ const RELAY_SPEC = {
     5: [ZERO_ADDRESS, "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "0xdc31Ee1784292379Fbb2964b3B9C4124D8F89C60", "0xc04b0d3107736c32e19f1c62b2af67be61d63a05"]
   },
   tipRecv: [numberToHex(256, { size: 20 }), '0x09784d03b42581cfc4fc90a7ab11c3125dedeb86', '0xb4fdaf8e6636e7394f6ae768c5fa9d2e5bf6f0dc'],
-  tipThreshold: 0.9,  // actual tip must at least cover this amount of gasFee
+  tipThreshold: 0.93,  // actual tip must at least cover this amount of gasFee
   maxFeePerGasIncrease: {1: 1.25, 5: 5},  // multiplies current gas by this number, based on chainId
 }
 

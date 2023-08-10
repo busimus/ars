@@ -44,7 +44,7 @@
           </div>
           <div style="display: flex; justify-content: space-between;">
             <span style="margin: auto 0">Slippage %</span><b-form-input id="input-swap-slippage"
-              v-model="action._slippage" type="number" trim placeholder="0" min="0" max="99" step="0.1" size="sm"
+              v-model="action._slippage" type="number" trim placeholder="0" min="0.1" max="99" step="0.1" size="sm"
               @input="swapInputHandler(action._fromQty, action._toQty)" style="max-width: 5rem;" />
           </div>
         </div>
@@ -71,7 +71,7 @@
           style="margin-bottom: 0.1rem;">Amount to withdraw</label>
         <div style="display: flex; gap: 0.4rem">
           <b-form-group id="input-group-withdraw-qty" label-for="input-withdraw-qty" class="mb-0" style="width: 100%">
-            <b-form-input id="input-withdraw-qty" v-model="action.qty" placeholder="0 to withdraw everything"
+            <b-form-input id="input-withdraw-qty" v-model="action.qty" placeholder="0.0"
               @update="reparseUnits(action.qty, '_qtyRaw', action.token)" required></b-form-input>
             <small class="form-text text-muted">DEX balance: {{ dexBalanceHuman(action.token) }} <a href="#"
                 @click.prevent="setWithdrawMax">Max</a></small>
@@ -89,7 +89,7 @@
           style="margin-bottom: 0.1rem;">Amount to transfer</label>
         <div style="display: flex; gap: 0.4rem">
           <b-form-group id="input-group-transfer-qty" label-for="input-transfer-qty" class="mb-0" style="width: 100%">
-            <b-form-input id="input-transfer-qty" v-model="action.qty" placeholder="0 to transfer everything"
+            <b-form-input id="input-transfer-qty" v-model="action.qty" placeholder="0.0"
               @update="reparseUnits(action.qty, '_qtyRaw', action.token)" required></b-form-input>
             <small class="form-text text-muted">DEX balance: {{ dexBalanceHuman(action.token) }} <a href="#"
                 @click.prevent="setWithdrawMax">Max</a></small>
@@ -212,9 +212,9 @@
       <b-button type="submit" v-if="actionType" :variant="sendButtonVariant()" size="lg"
         style="width: 100%; margin-top: 0.5rem" :disabled="!canSign || signing || actionImpossible == true">
         <div v-if="signing" class="load-spinner spinner-border spinner-border-md" role="status">
-          <span class="sr-only">{{ action._gasless ? 'Signing...' : 'Sending' }}</span>
+          <span class="sr-only">{{ signButtonText }}</span>
         </div>
-        <div v-else-if="!signing">{{ action._gasless ? 'Sign' : 'Send' }}</div>
+        <div v-else-if="!signing">{{ signButtonText }}</div>
       </b-button>
     </b-form>
     <b-modal ref="gasless-deposits-modal" title="Gasless deposit support" ok-only ok-variant="primary" size="lg" centered>
@@ -334,6 +334,9 @@ export default {
       // Object.assign(this.action, { ...action })
       // for (const [key, val] of Object.entries(action))
       //   this.$set(this.action, key, val)
+    },
+    resetAction: function () {
+      this.setAction(COMMANDS['swap'])
     },
     hoverSwapIcon: function (isHovered) {
       this.invertSwapIcon = isHovered
@@ -468,10 +471,13 @@ export default {
       if (!swap.success) {
         return
       }
-      if (qtyFrom)
+      if (qtyFrom) {
+        this.action._toQtyRaw = swap.output
         this.action._toQty = formatUnits(swap.output, this.tokens[this.action._toToken].decimals)
-      else
+      } else {
+        this.action._fromQtyRaw = swap.output
         this.action._fromQty = formatUnits(swap.output, this.tokens[this.action._fromToken].decimals)
+      }
     },
     setSlippageLimits: function () {
       const pool = this.pools[poolKey(this.action)]
@@ -563,6 +569,10 @@ export default {
       } else if (this.actionType == 'deposit') {
         if (!this.action.recv || this.action._gasless)
           this.action.recv = this.address
+        if (this.needTokenApproval) {
+          this.$emit('approve', this.action.token, this.action._qtyRaw)
+          return
+        }
       } else if (this.actionType == 'withdraw') {
         if (!this.action.recv)
           this.action.recv = this.address
@@ -602,7 +612,6 @@ export default {
     },
     preFillSwapTokens: function () {
       const chain = this.crocChain.chainId
-      console.log('prefill', this.action._fromToken)
       if (chain == 1) {
         this.action._fromToken = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
       } else if (chain == 5) {
@@ -621,17 +630,40 @@ export default {
       },
       set: function (actionType) {
         this.action = cloneDeep(COMMANDS[actionType])
+        if (this.action._type == 'swap') {
+          this.preFillSwapTokens()
+        }
       }
     },
     actionImpossible: function () {
-      if (this.actionType == 'deposit' && this.action._qtyRaw > this.walletBalances[this.action.token])
-        if (this.actionType == 'deposit' && this.action._gasless && NO_PERMIT_SUPPORT.includes(this.action.token))
+      const a = this.action
+      if (a._type == 'deposit') {
+        if (!this.walletBalances[a.token] || a._qtyRaw > this.walletBalances[a.token].raw)
           return true
-      if (this.actionType == 'deposit' && !this.action._gasless && this.action._qtyRaw > this.allowances[this.action.token])
-        return true
-      // console.log(this.action._fromQtyRaw, this.balances[this.action._fromToken])
-      if (this.actionType == 'swap' && this.action._fromToken && this.balances[this.action._fromToken] && this.action._fromQtyRaw > this.balances[this.action._fromToken].raw)
-        return true
+        if (a._gasless && NO_PERMIT_SUPPORT.includes(a.token))
+          return true
+        if (!a._gasless && a._qtyRaw > this.allowances[a.token])
+          return false // can be approved
+      } else if (a._type == 'withdraw' || a._type == 'transfer') {
+        if (a._qtyRaw <= 0)
+          return true
+      } else if (a._type == 'swap') {
+        if (a._fromToken && this.balances[a._fromToken] && a._fromQtyRaw > this.balances[a._fromToken].raw)
+          return true
+      }
+    },
+    signButtonText: function () {
+      const a = this.action
+      if (this.needTokenApproval)
+        return this.signing ? 'Approving...' : 'Approve'
+
+      if (!this.signing)
+        return a._gasless ? 'Sign' : 'Send'
+      else
+        return a._gasless ? 'Signing...' : 'Sending...'
+    },
+    needTokenApproval: function () {
+      return this.actionType == 'deposit' && !this.action._gasless && this.action._qtyRaw > this.allowances[this.action.token]
     },
     poolFilled: function () {
       if (isValidAddress(this.action.base) == true && isValidAddress(this.action.quote) == true)

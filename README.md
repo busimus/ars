@@ -35,6 +35,7 @@ The project is deployed at: [https://ars.bus.bz](https://ars.bus.bz)
 * [Bootstrap-vue](https://github.com/bootstrap-vue/bootstrap-vue) – MIT License, Copyright (c) 2016-2023 - BootstrapVue
 * [Bootstrap-dark](https://github.com/ForEvolve/bootstrap-dark) – MIT License, Copyright (c) 2018-2021 Carl-Hugo Marcottee
 * [ethers.js](https://github.com/ethers-io/ethers.js) – MIT License, Copyright (c) 2016-2023 Richard Moore
+* [eth-permit](https://github.com/dmihal/eth-permit) – MIT License, Copyright (c) 2020-2023 David Mihal
 * [CrocSwap SDK](https://github.com/CrocSwap/sdk/) – MIT License, Copyright (c) 2022 Crocodile Labs, Inc.
 * [web3modal](https://github.com/WalletConnect/web3modal) – Apache License 2.0, Copyright 2021 WalletConnect, Inc.
 * [viem](https://github.com/wagmi-dev/viem)+[wagmi](https://github.com/wagmi-dev/wagmi) – MIT License, Copyright (c) 2022-present weth, LLC

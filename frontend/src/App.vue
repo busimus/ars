@@ -28,7 +28,7 @@
             out of your DEX balance.
           </p>
         </b-collapse>
-        <hr style="margin-top: 0rem; margin-bottom: 0.5rem" />
+        <hr ref="aboveWalletContainer" style="margin-top: 0rem; margin-bottom: 0.5rem" />
 
         <div id="w3-button-container">
           <div v-if="!address">
@@ -47,36 +47,36 @@
           </div>
           <div v-if="chainError" class="text-danger" style="margin-top: 0.5rem">
             Your network is not supported!
-            <br/>
+            <br />
             Connect with Mainnet or Goerli Testnet to proceed.
           </div>
-          <div v-for="(status, hash) in waitingHashes"
-            style="display: flex; align-items: center; justify-content: space-between; padding-top: 1rem; gap: 0.5rem;">
-            <a href="#" style="width: 1rem; padding-bottom: 0.5rem; visibility: hidden">
-              <b-icon-x />
-            </a>
-            <div v-if="status === null" class="text-center animated-underline">
-              Waiting for
-              <a :href="txLink(hash)" target="_blank">{{
-                shortHash(hash)
-              }}</a>
-            </div>
-            <span v-else-if="status === true" class="text-center text-success" style="padding-bottom: 0.5em;">
-              Transaction confirmed
-              <a :href="txLink(hash)" target="_blank">{{
-                shortHash(hash)
-              }}</a>
-            </span>
-            <div v-else-if="status === false" class="text-center text-danger" style="padding-bottom: 0.5em;">
-              Transaction failed
-              <a :href="txLink(hash)" target="_blank">{{
-                shortHash(hash)
-              }}</a>
-            </div>
-            <a href="#" style="width: 1rem; padding-bottom: 0.5rem; color: inherit;"
-              @click.prevent="removeWaitingHash(hash)">
-              <b-icon-x />
-            </a>
+            <div v-for="(status, hash) in waitingHashes"
+              style="display: flex; align-items: center; justify-content: space-between; padding-top: 1rem; gap: 0.5rem;">
+              <a href="#" style="width: 1rem; padding-bottom: 0.5rem; visibility: hidden">
+                <b-icon-x />
+              </a>
+              <div v-if="status === null" class="text-center animated-underline">
+                Waiting for
+                <a :href="txLink(hash)" target="_blank">{{
+                  shortHash(hash)
+                }}</a>
+              </div>
+              <span v-else-if="status === true" class="text-center text-success" style="padding-bottom: 0.5em;">
+                Transaction confirmed
+                <a :href="txLink(hash)" target="_blank">{{
+                  shortHash(hash)
+                }}</a>
+              </span>
+              <div v-else-if="status === false" class="text-center text-danger" style="padding-bottom: 0.5em;">
+                Transaction failed
+                <a :href="txLink(hash)" target="_blank">{{
+                  shortHash(hash)
+                }}</a>
+              </div>
+              <a href="#" style="width: 1rem; padding-bottom: 0.5rem; color: inherit;"
+                @click.prevent="removeWaitingHash(hash)">
+                <b-icon-x />
+              </a>
           </div>
         </div>
       </div>
@@ -578,12 +578,13 @@ export default {
       return permit
     },
     sendApproveTx: async function (tokenAddr, qty) {
+      this.signing = true
       if (tokenAddr == ZERO_ADDRESS)
         return
       const client = getPublicClient()
       const call = {
         address: tokenAddr, abi: [{ "constant": false, "inputs": [{ "name": "_spender", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "approve", "outputs": [], "payable": false, "stateMutability": "nonpayable", "type": "function" }, { "constant": true, "inputs": [], "name": "deprecated", "outputs": [{ "name": "", "type": "bool" }], "payable": false, "stateMutability": "view", "type": "function" }],
-        functionName: "allowance", args: [this.address, CROC_CHAINS[this.chainId].addrs.dex, qty],
+        functionName: "approve", args: [CROC_CHAINS[this.chainId].addrs.dex, qty],
         account: this.account
       }
       try {
@@ -598,6 +599,7 @@ export default {
         // this.showToast('Send TX error', e.toString(), 'danger')
         // throw e
       }
+      this.signing = false
     },
     buildDepositCmd: function (action) {
       const callpath = CROC_CHAINS[this.chainId].depositCallpath
@@ -801,7 +803,7 @@ export default {
       const tip = scmd._action.tip;
       const a = scmd._action;
       const tipTokenBalance = this.balances[tip.token] ? this.balances[tip.token].raw : 0n
-      // console.log('scmd', scmd)
+      console.log('scmd', scmd)
       // console.log('tip', tip, tipTokenBalance)
       // console.log(this.balances)
 
@@ -824,7 +826,7 @@ export default {
       }
 
       // if swapping to tipped token and settling it to DEX
-      if (a._type == 'swap' && a._toToken == tip.token && (a._estimate.minOut + tipTokenBalance) >= tip.amount) {
+      if (a._type == 'swap' && a._toToken == tip.token && (a._estimate.result + tipTokenBalance) >= tip.amount) {
         console.log('swap to tip', scmd)
         if (scmd._action.settleFlags == SETTLE_TO_DEX) {
           return true
@@ -1093,10 +1095,19 @@ export default {
       // const refreshables = [await this.fetchSurpluses(this.address, [], true),]
       if (this.signed.selected) {
         refreshables.push(this.estimateTips(this.signed.options.find(o => o.sig == this.signed.selected)))
-        // i'm tired of writing multicalls, let batching do the work for once
-        for (const token of Object.keys(this.allowances))
-          refreshables.push(this.fetchTokenAllowance(token))
       }
+
+      const walletTokens = Object.keys(this.allowances)
+      if (walletTokens.indexOf(ZERO_ADDRESS) == -1)
+        walletTokens.unshift(ZERO_ADDRESS)
+      if (this.chainId == 1 && walletTokens.indexOf("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") == -1)
+        walletTokens.push("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
+      if (this.chainId == 5 && walletTokens.indexOf("0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c") == -1)
+        walletTokens.push("0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c")
+      // i'm tired of writing multicalls, let batching do the work for once
+      for (const token of walletTokens)
+        refreshables.push(this.fetchWalletBalance(token)) // will fetch allowance too
+
       try {
         await Promise.all(refreshables)
       } catch (e) {
@@ -1105,8 +1116,10 @@ export default {
       this.refreshing -= 1
     },
     resetData: function (full = false) {
+      this.$refs.actionInput.resetAction()
       this.balances = {}
       this.walletBalances = {}
+      this.allowances = {}
       this.positions = {}
       this.signed.selected = null
       this.signed.options = []
@@ -1307,10 +1320,12 @@ export default {
               tokens.push(tokenAddr)
         }
         // @TODO: maybe remove for prod
-        // if (tokens.indexOf(ZERO_ADDRESS) == -1)
-        //   tokens.unshift(ZERO_ADDRESS)
-        // if (this.chainId == 1 && tokens.indexOf("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") == -1)
-        //   tokens.push("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
+        if (tokens.indexOf(ZERO_ADDRESS) == -1)
+          tokens.unshift(ZERO_ADDRESS)
+        if (this.chainId == 1 && tokens.indexOf("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") == -1)
+          tokens.push("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
+        if (this.chainId == 5 && tokens.indexOf("0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c") == -1)
+          tokens.push("0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c")
         // console.log(owner, tokens)
         const surpluses = await this.fetchSurplusAmounts(owner, tokens)
         console.log('surpluses', surpluses)
@@ -1355,7 +1370,11 @@ export default {
         slippage = 0.1
       else if (slippage > 99)
         slippage = 99
-      const swap = { success: false, output: null, minOut: null, priceAfter: null, slipDirection: null, args: null }
+      // output - expected amount received/spent
+      // minOut - same but with slippage
+      // slipDirection - 1 if price going up is bad, -1 if price going down is bad
+      // result - amount of tokens that will be received (not spent)
+      const swap = { success: false, output: null, minOut: null, priceAfter: null, slipDirection: null, result: null, args: null }
       if (!qtyFrom && !qtyTo)
         return swap
       const client = getPublicClient()
@@ -1367,7 +1386,7 @@ export default {
       if (!poolIdx)
         poolIdx = CROC_CHAINS[this.chainId].poolIndex
 
-      // true if the user wants to pay base token and receive quote token. False if the user wants to receive base token and pay quote token
+      // true if the user wants to pay base token and receive quote token. false if the user wants to receive base token and pay quote token
       let isBuy = true
       let [base, quote] = [from, to]
       if (hexToBigInt(base) > hexToBigInt(quote)) {
@@ -1381,7 +1400,7 @@ export default {
 
       const qty = qtyFrom ? qtyFrom : qtyTo
 
-      const limitPrice = isBuy ? 0xffff5433e2b3d8211706e6102aa9471n : 65537n
+      const limitPrice = isBuy ? 0xffff5433e2b3d8211706e6102aa9471n : 65537n // temporary
       const args = [base, quote, poolIdx, isBuy, inBaseQty, qty, 0, limitPrice]
       console.log('args', args)
       const [baseFlow, quoteFlow, finalPrice] = await client.readContract({
@@ -1392,6 +1411,7 @@ export default {
       swap.success = true
       swap.args = { base, quote, poolIdx, isBuy, inBaseQty, qty, tip: 0, limitPrice }
       swap.output = inBaseQty ? quoteFlow : baseFlow
+      swap.result = isBuy ? quoteFlow * -1n : baseFlow * -1n
       const outToken =
         swap.output = inBaseQty ^ isBuy ? swap.output : swap.output * -1n
       swap.priceAfter = finalPrice
@@ -1435,6 +1455,7 @@ export default {
       if (hash) {
         let success = null
         this.$set(this.waitingHashes, hash, null)
+        this.$nextTick(() => this.$refs.aboveWalletContainer.scrollIntoView({ behavior: 'smooth', block: 'start' }))
         try {
           const args = { hash, timeout, pollingInterval: 6_000, _relayerEndpoint: relayerEndpoint, _chainId: this.chainId }
           success = await this.pollTxStatus(args)

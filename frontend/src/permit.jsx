@@ -155,27 +155,6 @@ export const signERC2612Permit = async (
   }
   console.log('permit message', message)
 
-  // const domain = {
-  //   name,
-  //   // version: "1",
-  //   chainId,
-  //   verifyingContract: tokenAddress
-  // }
-  // const enc = encodeAbiParameters(
-  //   [
-  //     { name: 'eip', type: 'bytes32' },
-  //     { name: 'name', type: 'bytes32' },
-  //     { name: 'chain', type: 'uint256' },
-  //     { name: 'token', type: 'address' },
-  //   ],
-  //   [keccak256('EIP712Domain(string name,uint256 chainId,address verifyingContract)'),
-  //   keccak256(toBytes(name)),
-  //     chainId,
-  //     tokenAddress]
-  // )
-  // const DOMAIN_SEPARATOR = keccak256(enc)
-  // console.log('SEP', DOMAIN_SEPARATOR)
-
   const domain = guessDomain(name, version, chainId, tokenAddress, domainHash)
   console.log('permit domain', domain)
 

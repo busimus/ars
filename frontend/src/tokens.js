@@ -18,7 +18,17 @@ export const TOKENS = {
             "symbolLower": "usdc",
             "decimals": 6,
             "chainId": 1,
-            "logoURI": "https://assets.coingecko.com/coins/images/6319/thumb/USD_Coin_icon.png"
+            "logoURI": "https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png"
+        },
+        "0xdac17f958d2ee523a2206206994597c13d831ec7": {
+            "chainId": 1,
+            "address": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+            "name": "Tether",
+            "symbol": "USDT",
+            "nameLower": "tether",
+            "symbolLower": "usdt",
+            "decimals": 6,
+            "logoURI": "https://assets.coingecko.com/coins/images/325/large/Tether.png?1668148663"
         },
         "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": {
             "name": "Wrapped BTC",
@@ -36,7 +46,7 @@ export const TOKENS = {
             "symbol": "PEPE",
             "decimals": 18,
             "chainId": 1,
-            "logoURI": "https://assets.coingecko.com/coins/images/29850/thumb/pepe-token.jpeg",
+            "logoURI": "https://assets.coingecko.com/coins/images/29850/large/pepe-token.jpeg",
             "nameLower": "pepe",
             "symbolLower": "pepe",
         },
@@ -70,7 +80,7 @@ export const TOKENS = {
             "symbolLower": "usdc",
             "decimals": 6,
             "chainId": 5,
-            "logoURI": "https://assets.coingecko.com/coins/images/6319/thumb/USD_Coin_icon.png"
+            "logoURI": "https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png"
         },
         "0xdc31ee1784292379fbb2964b3b9c4124d8f89c60": {
             "address": "0xdc31ee1784292379fbb2964b3b9c4124d8f89c60",
@@ -112,7 +122,7 @@ export const TOKENS = {
             "symbolLower": "usdc",
             "decimals": 6,
             "chainId": 421613,
-            "logoURI": "https://assets.coingecko.com/coins/images/6319/thumb/USD_Coin_icon.png"
+            "logoURI": "https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png"
         }
     }
 }
