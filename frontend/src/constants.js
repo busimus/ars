@@ -9,7 +9,7 @@ const GOERLI_CHAIN = {
   depositPermitCallpath: 0,
   poolIndex: 36000,
   isTestNet: true,
-  chainId: "0x5",
+  chainId: 5,
   gridSize: 64,
   proxyPaths: {
     cold: 0,
@@ -29,7 +29,7 @@ const ARB_GOERLI_CHAIN = {
   },
   poolIndex: 36000,
   isTestNet: true,
-  chainId: "0x66eed",
+  chainId: 421613,
   gridSize: 16,
   proxyPaths: {
     cold: 3,
@@ -51,7 +51,7 @@ const MAINNET_CHAIN = {
   depositPermitCallpath: 3,
   poolIndex: 420,
   isTestNet: false,
-  chainId: "0x1",
+  chainId: 1,
   gridSize: 16,
   proxyPaths: {
     cold: 3,

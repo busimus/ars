@@ -1,3 +1,10 @@
+<!--
+  Small warning:
+  Most of the code in this project was written under a time constraint and
+  intended to be used by one person (before I decided to release it publicly).
+  This doesn't excuse some of the horrors you might encounter, but hopefully
+  it will at least explain them.
+-->
 <template>
   <div id="wrapper">
     <div id="main-ui-wrapper" style="padding-top: 0.5em; padding-bottom: 0.5em" class="container-fluid">
@@ -38,6 +45,11 @@
                 shortHash(this.address) }}
             </b-button>
           </div>
+          <div v-if="chainError" class="text-danger" style="margin-top: 0.5rem">
+            Your network is not supported!
+            <br/>
+            Connect with Mainnet or Goerli Testnet to proceed.
+          </div>
           <div v-for="(status, hash) in waitingHashes"
             style="display: flex; align-items: center; justify-content: space-between; padding-top: 1rem; gap: 0.5rem;">
             <a href="#" style="width: 1rem; padding-bottom: 0.5rem; visibility: hidden">
@@ -77,10 +89,10 @@
         <!-- there were too many props ten props ago -->
         <ActionInput class="main-panel border shadow-sm rounded" style="height: auto; width: inherit" ref="actionInput"
           @perform="performAction" @fetchToken="a => fetchTokenInfo(a, true)"
-          @fetchWalletBalance="a => fetchWalletBalance(a)" @approve="sendApproveTx" :fetchSwapOutput="fetchSwapOutput" :pools="pools"
-          :tokens="TOKENS[chainId]" :coldTokens="COLD_TOKENS" :balances="balances" :walletBalances="walletBalances"
-          :allowances="allowances" :address="address" :signing="signing" :canSign="canSign"
-          :crocChain="CHAINS[chainId]" />
+          @fetchWalletBalance="a => fetchWalletBalance(a)" @approve="sendApproveTx" :fetchSwapOutput="fetchSwapOutput"
+          :pools="pools" :tokens="TOKENS[chainId]" :coldTokens="COLD_TOKENS" :balances="balances"
+          :walletBalances="walletBalances" :allowances="allowances" :address="address" :signing="signing"
+          :canSign="canSign" :crocChain="CHAINS[chainId]" />
       </div>
       <!-- this should obviously be its own component but i'm too tired of dealing with Vue at this point -->
       <div ref="signedCmdsPanel" v-if="Object.keys(signed.options).length > 0" id="signed-cmds-panel"
@@ -304,9 +316,9 @@ export default {
       estimating: false,
       refreshTicker: null,
       waitingHashes: {},
-      // waitingHashes: {'0xee1b446020020ff78417077f15f1d536c02873e2a499ea9e10ed856134bd1903': false, '0xee1b446020020ff78417077f15f1d536c02873e2a499ea9e10ed856134bd1904': null, '0xee1b446020020ff78417077f15f1d536c02873e2a499ea9e10ed856134bd1905': true},
-      autoRefreshPaused: true,
+      autoRefreshPaused: false,
       lastRefresh: 0,
+      chainError: false,
       RELAYERS,
       TOKENS,
       CHAINS: CROC_CHAINS,
@@ -331,9 +343,15 @@ export default {
       this.chain = network
       if (network.chain) {
         this.resetData(true) // before chainId because some components depend on it
-        this.chainId = network.chain.id
+        if ([1, 5].includes(network.chain.id)) {
+          this.chainError = false
+          this.chainId = network.chain.id
+        } else {
+          this.chainError = true
+        }
         this.refreshData()
       } else {
+        this.chainError = false
         this.resetData(true)
         this.chainid = 1
       }
@@ -783,8 +801,8 @@ export default {
       const tip = scmd._action.tip;
       const a = scmd._action;
       const tipTokenBalance = this.balances[tip.token] ? this.balances[tip.token].raw : 0n
-      console.log('scmd', scmd)
-      console.log('tip', tip, tipTokenBalance)
+      // console.log('scmd', scmd)
+      // console.log('tip', tip, tipTokenBalance)
       // console.log(this.balances)
 
       // If withdrawing/transfering the tip token adjust withdrawan amount if needed
@@ -806,7 +824,7 @@ export default {
       }
 
       // if swapping to tipped token and settling it to DEX
-      if (a._type == 'swap' && a._toToken == tip.token && a._estimate.minOut >= tip.amount) {
+      if (a._type == 'swap' && a._toToken == tip.token && (a._estimate.minOut + tipTokenBalance) >= tip.amount) {
         console.log('swap to tip', scmd)
         if (scmd._action.settleFlags == SETTLE_TO_DEX) {
           return true
@@ -955,7 +973,7 @@ export default {
         }
 
         const prices = await this.getPrices(tipTokens, ZERO_ADDRESS)
-        console.log('gotPrices', prices)
+        // console.log('gotPrices', prices)
 
         for (const tokenAddress of tipTokens) {
           if (tokenAddress == ZERO_ADDRESS)
@@ -1179,7 +1197,7 @@ export default {
       const fetchedPools = {}
       for (const i in poolIds) {
         const pool = pools[poolIds[i]]
-        console.log('fetched pool', poolIds[i], pool, reads[i])
+        // console.log('fetched pool', poolIds[i], pool, reads[i])
         if (reads[i].status != "success" || reads[i].result == 0n) {
           console.error('pool fetch failure', poolIds[i])
           if (!ignoreErrors)
@@ -1233,12 +1251,17 @@ export default {
       }
       if (!token) {
         console.log('token cache miss', address)
-        token = await fetchToken({ address, chainId: this.chainId })
-        token.symbolLower = token.symbol.toLowerCase()
-        token.nameLower = token.name.toLowerCase()
-        this.$set(this.TOKENS[this.chainId], address, token)
+        try {
+          token = await fetchToken({ address, chainId: this.chainId })
+          token.symbolLower = token.symbol.toLowerCase()
+          token.nameLower = token.name.toLowerCase()
+          this.$set(this.TOKENS[this.chainId], address, token)
+        } catch (e) {
+          console.error('token fetch error', e)
+          return
+        }
       }
-      if (fetchSurplus && this.balances[address] == undefined) {
+      if (fetchSurplus && this.address && this.balances[address] == undefined) {
         this.fetchSurpluses(this.address, [address])
       }
       return token
@@ -1328,6 +1351,10 @@ export default {
     },
     // either qtyFrom or qtyTo should be set
     fetchSwapOutput: async function (from, to, poolIdx, qtyFrom, qtyTo, slippage = 0.5) {
+      if (slippage < 0.1)
+        slippage = 0.1
+      else if (slippage > 99)
+        slippage = 99
       const swap = { success: false, output: null, minOut: null, priceAfter: null, slipDirection: null, args: null }
       if (!qtyFrom && !qtyTo)
         return swap
@@ -1360,7 +1387,7 @@ export default {
       const [baseFlow, quoteFlow, finalPrice] = await client.readContract({
         functionName: 'calcImpact', args, ...iContract
       })
-      console.log(baseFlow, quoteFlow, finalPrice)
+      console.log('flows, price', baseFlow, quoteFlow, finalPrice)
 
       swap.success = true
       swap.args = { base, quote, poolIdx, isBuy, inBaseQty, qty, tip: 0, limitPrice }
@@ -1370,8 +1397,12 @@ export default {
       swap.priceAfter = finalPrice
       swap.slipDirection = inBaseQty ^ isBuy ? 1 : -1
       const slipBps = BigInt(parseInt(slippage * 100) * swap.slipDirection)
+      const priceSlipBps = BigInt(parseInt(slippage * 100) * (isBuy ? 1 : -1))
       const scaler = 1000000000n  // i can't math and i can't integer math even more
       swap.minOut = swap.output + ((swap.output * scaler) / 10000n * slipBps) / scaler
+      // this seems like a hack but it should work fine until normal swaps get fixed
+      swap.args.limitPrice = finalPrice + ((finalPrice * scaler) / 10000n * priceSlipBps) / scaler
+      console.log('prices', finalPrice, swap.args.limitPrice)
       return swap
     },
     relayButtonDisabled: function (scmd) {

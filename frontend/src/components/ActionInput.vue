@@ -4,9 +4,9 @@
       Command input
     </h4>
     <b-form-select v-model="actionType" value-field="_type" :options="COMMANDS"></b-form-select>
-    <b-form v-if="actionType" @submit="perform">
+    <b-form @submit="perform">
       <br />
-      <!-- swap should probably be its own component tbh but i want to get off mr. Vue's composability ride -->
+      <!-- swap should probably be its own component but i want to get off mr. Vue's composability ride -->
       <div v-if="actionType == 'swap'">
         <div style="display: flex; gap: 0.4rem">
           <b-form-group id="input-group-from-qty" label-for="input-from-qty" class="mb-0" style="width: 100%">
@@ -15,7 +15,7 @@
             <small class="form-text text-muted">DEX balance: {{ dexBalanceHuman(action._fromToken) }} <a href="#"
                 @click.prevent="setSwapToMax('from')">Max</a></small>
           </b-form-group>
-          <CoinSelector :address="action._fromToken" @update:address="a => setSwapToken('from', a)" :tokens="tokens"
+          <CoinSelector :address="action._fromToken" @update:address="a => { setSwapToken('from', a) }" :tokens="tokens"
             :cold_tokens="coldTokens" :balances="balances" @fetchToken="t => $emit('fetchToken', t)" />
         </div>
         <div style="text-align: center;">
@@ -32,11 +32,28 @@
             <!-- <small class="form-text text-muted">DEX balance: {{ dexBalanceHuman(action._toToken) }} <a href="#"
                 @click.prevent="setSwapToMax('to')">Max</a></small> -->
           </b-form-group>
-          <CoinSelector :address="action._toToken" @update:address="a => setSwapToken('to', a)" :tokens="tokens"
+          <CoinSelector :address="action._toToken" @update:address="a => { setSwapToken('to', a) }" :tokens="tokens"
             :cold_tokens="coldTokens" :balances="balances" @fetchToken="t => $emit('fetchToken', t)" />
         </div>
+        <div class="border rounded p-2" v-if="action._estimate != null && action._estimate.success"
+          style="display: flex; flex-direction:column; gap: 0.25rem; margin-top: 1rem">
+          <div style="display: flex; justify-content: space-between;">
+            <span style="margin: auto 0; padding: 0.1rem 0;">{{ action._estimate.slipDirection < 0 ? 'Minimum output'
+              : 'Maximum input' }}</span><span>{{ swapResultHuman(action)
+  }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="margin: auto 0">Slippage %</span><b-form-input id="input-swap-slippage"
+              v-model="action._slippage" type="number" trim placeholder="0" min="0" max="99" step="0.1" size="sm"
+              @input="swapInputHandler(action._fromQty, action._toQty)" style="max-width: 5rem;" />
+          </div>
+        </div>
+        <div v-else-if="action._estimate != null && !action._estimate.success"
+          class="border rounded text-center p-2 text-danger" style="margin-top: 1rem">
+          Swap estimation failed!
+        </div>
       </div>
-      <div v-if="actionType == 'withdraw'">
+      <div v-else-if="actionType == 'withdraw'">
         <!-- flex here makes the layout a little taller, awful -->
         <label id="input-group-withdraw-recv" for="input-withdraw-recv" class="d-block"
           style="margin-bottom: 0.1rem;">Recipient</label>
@@ -63,7 +80,7 @@
             :tokens="tokens" :cold_tokens="coldTokens" :balances="balances" @fetchToken="t => $emit('fetchToken', t)" />
         </div>
       </div>
-      <div v-if="actionType == 'transfer'">
+      <div v-else-if="actionType == 'transfer'">
         <AddressInput :address="action.recv" @update:address="a => action.recv = a" :name="'transfer-recv'"
           :label="'Recipient'" :placeholder="'Address'" :description="'Where DEX balance will be sent'"
           :tokens="tokens" />
@@ -81,7 +98,7 @@
             :tokens="tokens" :cold_tokens="coldTokens" :balances="balances" @fetchToken="t => $emit('fetchToken', t)" />
         </div>
       </div>
-      <div v-if="actionType == 'deposit'">
+      <div v-else-if="actionType == 'deposit'">
         <div v-if="!action._gasless">
           <label id="input-group-deposit-recv" for="input-deposit-recv" class="d-block"
             style="margin-bottom: 0.1rem;">Recipient</label>
@@ -121,12 +138,14 @@
       <div v-else-if="actionType == 'removeConcLp' || actionType == 'removeAmbLp'">
         <b-form-group>
           <div style="display: flex; gap: 0.4rem">
-            <CoinSelector :label="'Base token'" :address="action.base" @update:address="a => { action.base = a }" :useSurplus="action._baseSurplus" :surplusDirection="'to'" @update:useSurplus="u => { action._baseSurplus = u }"
-              :tokens="tokens" :cold_tokens="coldTokens" :balances="balances" @fetchToken="t => $emit('fetchToken', t)"
-              style="flex: 1" />
-            <CoinSelector :label="'Quote token'" :address="action.quote" @update:address="a => { action.quote = a }" :useSurplus="action._quoteSurplus" :surplusDirection="'to'" @update:useSurplus="u => { action._quoteSurplus = u }"
-              :tokens="tokens" :cold_tokens="coldTokens" :balances="balances" @fetchToken="t => $emit('fetchToken', t)"
-              style="flex: 1" />
+            <CoinSelector :label="'Base token'" :address="action.base" @update:address="a => { action.base = a }"
+              :useSurplus="action._baseSurplus" :surplusDirection="'to'"
+              @update:useSurplus="u => { action._baseSurplus = u }" :tokens="tokens" :cold_tokens="coldTokens"
+              :balances="balances" @fetchToken="t => $emit('fetchToken', t)" style="flex: 1" />
+            <CoinSelector :label="'Quote token'" :address="action.quote" @update:address="a => { action.quote = a }"
+              :useSurplus="action._quoteSurplus" :surplusDirection="'to'"
+              @update:useSurplus="u => { action._quoteSurplus = u }" :tokens="tokens" :cold_tokens="coldTokens"
+              :balances="balances" @fetchToken="t => $emit('fetchToken', t)" style="flex: 1" />
           </div>
         </b-form-group>
         <div v-if="actionType == 'removeConcLp'" style="display: flex; gap: 0.4rem">
@@ -177,7 +196,10 @@
           </div>
         </div>
       </div>
-      <div style="display: flex; justify-content: center; margin-top: 0.7rem">
+      <div v-else class="text-center">
+        Most commands can be automatically filled in using buttons in the exchange pane
+      </div>
+      <div v-if="actionType" style="display: flex; justify-content: center; margin-top: 0.7rem">
         <b-form-checkbox id="checkbox-gasless" v-if="actionType" v-model="action._gasless" name="checkbox-gasless" switch
           size="lg">
           Gasless
@@ -241,7 +263,7 @@ USDC, UNI, stETH, wstETH, LUSD, R, RSR, ARB, 1INCH.
 
 If the token you're interested in isn't listed then try it anyway – if you can create a signed deposit command without errors then it's supported.`
 
-// good stuff
+// @TODO: eyes hurt
 const PERMIT_SUPPORT = ["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984", "0x17144556fd3424edc8fc8a4c940b2d04936d17eb", "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0", "0x5f98805a4e8be255a32880fdec7f6728c6568ba0", "0x320623b8e4ff03373931769a31fc52a4e78b5d70", "0x183015a9ba6ff60230fdeadc3f43b3d788b13e21", "0x111111111117dc0aa78b770fa6a738034120c302", "0xb50721bcf8d664c30412cfbc6cf7a15145234ad1"]
 const NO_PERMIT_SUPPORT = ["0x0000000000000000000000000000000000000000", "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", "0x6982508145454ce325ddbe47a25d4ec3d2311933", "0x6b175474e89094c44da98b954eedeac495271d0f", "0xdc31ee1784292379fbb2964b3b9c4124d8f89c60", "0xc04b0d3107736c32e19f1c62b2af67be61d63a05", "0xdac17f958d2ee523a2206206994597c13d831ec7", "0x5a98fcbea516cf06857215779fd812ca3bef1b32", "0x72e4f9f808c49a2a61de9c5896298920dc4eeea9", "0x03ab458634910aad20ef5f1c8ee96f1d6ac54919"]
 
@@ -302,7 +324,11 @@ export default {
     setAction: function (action) {
       this.action = { ...action }
       // yeah i think i'm done with Vue.
-      this.$nextTick(() => { this.action = { ...action } })
+      this.$nextTick(() => {
+        this.action = { ...action };
+        if (this.action._type == 'swap')
+          this.preFillSwapTokens()
+      })
       // all of these don't work:
       // this.action = Object.assign({}, this.action, {...action})
       // Object.assign(this.action, { ...action })
@@ -346,6 +372,7 @@ export default {
           this.action._fromQty = balance.string
         this.swapInputHandler(this.action._fromQty, 0)
       } else if (side == 'to') {
+        // remove this lmao
         const balance = this.balances[this.action._toToken]
         if (balance)
           this.action._toQty = balance.string
@@ -353,10 +380,22 @@ export default {
       }
     },
     swapInputHandler: function (qtyFrom, qtyTo) {
-      console.log('from', qtyFrom, typeof (qtyFrom))
-      console.log('to  ', qtyTo, typeof (qtyTo))
+      // console.log('from', qtyFrom, typeof (qtyFrom))
+      // console.log('to  ', qtyTo, typeof (qtyTo))
+      // if both are specified it either takes the direction of last estimate
+      // or defaults to the normal direction
+      if (qtyFrom && qtyTo) {
+        if (this.action._estimate && this.action._estimate.success) {
+          if (this.action._estimate.slipDirection < 0) {
+            qtyTo = null
+          } else {
+            qtyFrom = null
+          }
+        } else {
+          qtyTo = null
+        }
+      }
       if (qtyFrom === '' || qtyTo === '') {
-        console.log('1')
         this.action._fromQty = null
         this.action._toQty = null
         return
@@ -366,7 +405,6 @@ export default {
       if (typeof (qtyTo) == 'string')
         this.action._fromQty = null
       if (qtyFrom <= 0 && qtyTo <= 0) {
-        console.log('4')
         return
       }
       if (!this.action._fromToken || !this.action._toToken)
@@ -400,34 +438,36 @@ export default {
       this.swapInputHandler(this.action._fromQty, 0)
     },
     setSwapToken: function (side, address) {
-      console.log('side', address, this.action._fromToken, this.action._toToken)
+      console.log('side', side, address, this.action._fromToken, this.action._toToken)
       if (side == 'from') {
         // console.log('f', this.action._toToken == address)
         if (this.action._toToken == address)
           return
-        this.action._fromQty = null
         this.action._fromToken = address
       } else if (side == 'to') {
         // console.log('t', this.action._toToken == address)
         if (this.action._fromToken == address)
           return
-        this.action._toQty = null
         this.action._toToken = address
       }
+      this.action._fromQty = null
+      this.action._fromQtyRaw = 0n
+      this.action._toQty = null
+      this.action._toQtyRaw = 0n
+      this.action._estimate = null
       this.maybeGetSwapOutput(this.action._fromQtyRaw, this.action._toQtyRaw)
     },
     maybeGetSwapOutput: async function (qtyFrom, qtyTo) {
       // console.log('maybeGet', this.swapDebouncer, qtyFrom, qtyTo)
-      if (this.swapDebouncer > 1)
+      if (this.swapDebouncer > 1 || (!qtyFrom && !qtyTo))
         return
 
       const swap = await this.fetchSwapOutput(this.action._fromToken, this.action._toToken, this.action.poolIdx, qtyFrom, qtyTo, this.action._slippage)
       console.log('swapOutput', swap)
+      this.action._estimate = swap
       if (!swap.success) {
-        this.swapError = 'Error while estimating swap'
         return
       }
-      this.action._estimate = swap
       if (qtyFrom)
         this.action._toQty = formatUnits(swap.output, this.tokens[this.action._toToken].decimals)
       else
@@ -474,9 +514,16 @@ export default {
           const settlement = this.describeSettlement(a)
           a._description = `Remove LP: ${amtBase} + ${amtQuote}${settlement}`
         } else if (this.actionType == 'swap') {
-          const reformatted = formatUnits(a._fromQtyRaw, this.tokens[a._fromToken].decimals)
-          const qty = getFormattedNumber(parseFloat(reformatted))
-          a._description = `Swap: ${qty} ${this.tokens[a._fromToken].symbol} for ${this.tokens[a._toToken].symbol}`
+          console.log('describing', this.action)
+          if (a._estimate.slipDirection < 0) {
+            const reformatted = formatUnits(a._fromQtyRaw, this.tokens[a._fromToken].decimals)
+            const qty = getFormattedNumber(parseFloat(reformatted))
+            a._description = `Swap: ${qty} ${this.tokens[a._fromToken].symbol} for ${this.tokens[a._toToken].symbol}`
+          } else {
+            const reformatted = formatUnits(a._toQtyRaw, this.tokens[a._toToken].decimals)
+            const qty = getFormattedNumber(parseFloat(reformatted))
+            a._description = `Swap: ${this.tokens[a._fromToken].symbol} for ${qty} ${this.tokens[a._toToken].symbol}`
+          }
         } else {
           throw `Can't describe this action ${this.actionType}`
         }
@@ -484,7 +531,7 @@ export default {
         console.error('describe error', e)
       }
     },
-    describeSettlement: function(action) {
+    describeSettlement: function (action) {
       if (['removeConcLp', 'removeAmbLp'].indexOf(this.actionType) != -1) {
         const base = this.tokens[action.base].symbol
         const quote = this.tokens[action.quote].symbol
@@ -543,10 +590,29 @@ export default {
         return '...'
       return balance.human
     },
+    swapResultHuman: function (action) {
+      if (action._estimate == null && action._estimate.minOut)
+        return '??'
+      const token = this.tokens[action._estimate.slipDirection < 0 ? action._toToken : action._fromToken]
+      return `${getFormattedNumber(formatUnits(action._estimate.minOut, token.decimals))} ${token.symbol}`
+    },
     sendButtonVariant: function () {
       let color = this.action._gasless ? 'primary' : 'success'
       return this.signing ? `outline-${color}` : color
     },
+    preFillSwapTokens: function () {
+      const chain = this.crocChain.chainId
+      console.log('prefill', this.action._fromToken)
+      if (chain == 1) {
+        this.action._fromToken = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+      } else if (chain == 5) {
+        this.action._fromToken = "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c"
+      } else if (chain == 421613) {
+        this.action._fromToken = "0xc944b73fba33a773a4a07340333a3184a70af1ae"
+      }
+      console.log(this.action._fromToken)
+      this.action._toToken = ZERO_ADDRESS
+    }
   },
   computed: {
     actionType: {
@@ -562,6 +628,9 @@ export default {
         if (this.actionType == 'deposit' && this.action._gasless && NO_PERMIT_SUPPORT.includes(this.action.token))
           return true
       if (this.actionType == 'deposit' && !this.action._gasless && this.action._qtyRaw > this.allowances[this.action.token])
+        return true
+      // console.log(this.action._fromQtyRaw, this.balances[this.action._fromToken])
+      if (this.actionType == 'swap' && this.action._fromToken && this.balances[this.action._fromToken] && this.action._fromQtyRaw > this.balances[this.action._fromToken].raw)
         return true
     },
     poolFilled: function () {
@@ -595,8 +664,16 @@ export default {
     },
   },
   mounted: function () {
+    if (this.action._type == 'swap') {
+      this.preFillSwapTokens()
+    }
   },
   watch: {
+    crocChain: function (chain) {
+      if (this.action._type == 'swap') {
+        this.preFillSwapTokens()
+      }
+    },
   }
 };
 
