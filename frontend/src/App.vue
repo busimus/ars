@@ -135,9 +135,7 @@
                   <b-icon-arrow-clockwise v-else :class="{ 'icon-spin': estimating }" />
                 </b-button>
               </div>
-              <small class="form-text text-muted text-center mb-2">Will be deducted from your exchange balance (or
-                the
-                command will be automatically adjusted to ensure you have enough left)</small>
+              <small class="form-text text-muted text-center mb-2">Will be deducted from your exchange balance (or the command size will be reduced to ensure you have enough left)</small>
             </b-form-group>
             <div id="attached-tip" v-if="scmd._action.tip.amount" style="display: flex; align-items: center; gap: 0.5rem">
               <span style="height: fit-content">Attached tip: {{ this.tipAmountHuman(scmd._action.tip) }}</span>
