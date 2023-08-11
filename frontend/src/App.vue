@@ -50,33 +50,33 @@
             <br />
             Connect with Mainnet or Goerli Testnet to proceed.
           </div>
-            <div v-for="(status, hash) in waitingHashes"
-              style="display: flex; align-items: center; justify-content: space-between; padding-top: 1rem; gap: 0.5rem;">
-              <a href="#" style="width: 1rem; padding-bottom: 0.5rem; visibility: hidden">
-                <b-icon-x />
-              </a>
-              <div v-if="status === null" class="text-center animated-underline">
-                Waiting for
-                <a :href="txLink(hash)" target="_blank">{{
-                  shortHash(hash)
-                }}</a>
-              </div>
-              <span v-else-if="status === true" class="text-center text-success" style="padding-bottom: 0.5em;">
-                Transaction confirmed
-                <a :href="txLink(hash)" target="_blank">{{
-                  shortHash(hash)
-                }}</a>
-              </span>
-              <div v-else-if="status === false" class="text-center text-danger" style="padding-bottom: 0.5em;">
-                Transaction failed
-                <a :href="txLink(hash)" target="_blank">{{
-                  shortHash(hash)
-                }}</a>
-              </div>
-              <a href="#" style="width: 1rem; padding-bottom: 0.5rem; color: inherit;"
-                @click.prevent="removeWaitingHash(hash)">
-                <b-icon-x />
-              </a>
+          <div v-for="(status, hash) in waitingHashes"
+            style="display: flex; align-items: center; justify-content: space-between; padding-top: 1rem; gap: 0.5rem;">
+            <a href="#" style="width: 1rem; padding-bottom: 0.5rem; visibility: hidden">
+              <b-icon-x />
+            </a>
+            <div v-if="status === null" class="text-center animated-underline">
+              Waiting for
+              <a :href="txLink(hash)" target="_blank">{{
+                shortHash(hash)
+              }}</a>
+            </div>
+            <span v-else-if="status === true" class="text-center text-success" style="padding-bottom: 0.5em;">
+              Transaction confirmed
+              <a :href="txLink(hash)" target="_blank">{{
+                shortHash(hash)
+              }}</a>
+            </span>
+            <div v-else-if="status === false" class="text-center text-danger" style="padding-bottom: 0.5em;">
+              Transaction failed
+              <a :href="txLink(hash)" target="_blank">{{
+                shortHash(hash)
+              }}</a>
+            </div>
+            <a href="#" style="width: 1rem; padding-bottom: 0.5rem; color: inherit;"
+              @click.prevent="removeWaitingHash(hash)">
+              <b-icon-x />
+            </a>
           </div>
         </div>
       </div>
@@ -1108,21 +1108,24 @@ export default {
       for (const token of walletTokens)
         refreshables.push(this.fetchWalletBalance(token)) // will fetch allowance too
 
+      if (this.$refs.actionInput) // ????
+        refreshables.push(this.$refs.actionInput.refreshSwap())
+
       try {
-        await Promise.all(refreshables)
+        await Promise.allSettled(refreshables)
       } catch (e) {
         console.error("refreshData error", e)
       }
+      this.lastRefresh = Date.now()
       this.refreshing -= 1
     },
     resetData: function (full = false) {
-      this.$refs.actionInput.resetAction()
+      if (this.$refs.actionInput) // ????
+        this.$refs.actionInput.resetAction()
       this.balances = {}
       this.walletBalances = {}
       this.allowances = {}
       this.positions = {}
-      this.signed.selected = null
-      this.signed.options = []
       this.ensName = null
       this.ensAvatar = null
       this.ethBalance = null
@@ -1237,16 +1240,20 @@ export default {
       return fetchedPools
     },
     fetchTokens: async function () {
-      // if (this.chainId != 1)
-      // return
-      const response = await fetch('https://tokens.coingecko.com/uniswap/all.json', {
-        method: "GET",
-        referrerPolicy: "no-referrer",
-      });
+      let response
+      try {
+        response = await fetch('https://tokens.coingecko.com/uniswap/all.json', {
+          method: "GET",
+          referrerPolicy: "no-referrer",
+        });
+      } catch (e) {
+        console.log('token list fetch error', e)
+        return
+      }
       const resp = await response.json()
       for (const token of resp.tokens) {
         if (token.logoURI && token.logoURI.startsWith('https://assets.coingecko.com'))
-          token.logoURI.replace(/\/thumb\//, '/large/')
+          token.logoURI = token.logoURI.replace(/\/thumb\//, '/large/')
         token.symbolLower = token.symbol.toLowerCase()
         token.nameLower = token.name.toLowerCase()
         this.$set(this.COLD_TOKENS, token.address, token)
@@ -1375,54 +1382,59 @@ export default {
       // slipDirection - 1 if price going up is bad, -1 if price going down is bad
       // result - amount of tokens that will be received (not spent)
       const swap = { success: false, output: null, minOut: null, priceAfter: null, slipDirection: null, result: null, args: null }
-      if (!qtyFrom && !qtyTo)
-        return swap
-      const client = getPublicClient()
-      const iContract = {
-        address: CROC_CHAINS[this.chainId].addrs.impact,
-        abi: IMPACT_ABI
+      try {
+        if (!qtyFrom && !qtyTo)
+          return swap
+        const client = getPublicClient()
+        const iContract = {
+          address: CROC_CHAINS[this.chainId].addrs.impact,
+          abi: IMPACT_ABI
+        }
+
+        if (!poolIdx)
+          poolIdx = CROC_CHAINS[this.chainId].poolIndex
+
+        // true if the user wants to pay base token and receive quote token. false if the user wants to receive base token and pay quote token
+        let isBuy = true
+        let [base, quote] = [from, to]
+        if (hexToBigInt(base) > hexToBigInt(quote)) {
+          isBuy = false;
+          [base, quote] = [to, from]
+        }
+
+        let inBaseQty = false
+        if ((qtyFrom && from == base) || (qtyTo && to == base))
+          inBaseQty = true
+
+        const qty = qtyFrom ? qtyFrom : qtyTo
+
+        const limitPrice = isBuy ? 0xffff5433e2b3d8211706e6102aa9471n : 65537n // temporary
+        const args = [base, quote, poolIdx, isBuy, inBaseQty, qty, 0, limitPrice]
+        console.log('args', args)
+        const [baseFlow, quoteFlow, finalPrice] = await client.readContract({
+          functionName: 'calcImpact', args, ...iContract
+        })
+        console.log('flows, price', baseFlow, quoteFlow, finalPrice)
+
+        swap.success = true
+        swap.args = { base, quote, poolIdx, isBuy, inBaseQty, qty, tip: 0, limitPrice }
+        swap.output = inBaseQty ? quoteFlow : baseFlow
+        swap.result = isBuy ? quoteFlow * -1n : baseFlow * -1n
+        const outToken =
+          swap.output = inBaseQty ^ isBuy ? swap.output : swap.output * -1n
+        swap.priceAfter = finalPrice
+        swap.slipDirection = inBaseQty ^ isBuy ? 1 : -1
+        const slipBps = BigInt(parseInt(slippage * 100) * swap.slipDirection)
+        const priceSlipBps = BigInt(parseInt(slippage * 100) * (isBuy ? 1 : -1))
+        const scaler = 1000000000n  // i can't math and i can't integer math even more
+        swap.minOut = swap.output + ((swap.output * scaler) / 10000n * slipBps) / scaler
+        // this seems like a hack but it should work fine until normal swaps get fixed
+        swap.args.limitPrice = finalPrice + ((finalPrice * scaler) / 10000n * priceSlipBps) / scaler
+        console.log('prices', finalPrice, swap.args.limitPrice)
+      } catch (e) {
+        console.error('fetchSwapOutput error', e)
+        swap.success = false
       }
-
-      if (!poolIdx)
-        poolIdx = CROC_CHAINS[this.chainId].poolIndex
-
-      // true if the user wants to pay base token and receive quote token. false if the user wants to receive base token and pay quote token
-      let isBuy = true
-      let [base, quote] = [from, to]
-      if (hexToBigInt(base) > hexToBigInt(quote)) {
-        isBuy = false;
-        [base, quote] = [to, from]
-      }
-
-      let inBaseQty = false
-      if ((qtyFrom && from == base) || (qtyTo && to == base))
-        inBaseQty = true
-
-      const qty = qtyFrom ? qtyFrom : qtyTo
-
-      const limitPrice = isBuy ? 0xffff5433e2b3d8211706e6102aa9471n : 65537n // temporary
-      const args = [base, quote, poolIdx, isBuy, inBaseQty, qty, 0, limitPrice]
-      console.log('args', args)
-      const [baseFlow, quoteFlow, finalPrice] = await client.readContract({
-        functionName: 'calcImpact', args, ...iContract
-      })
-      console.log('flows, price', baseFlow, quoteFlow, finalPrice)
-
-      swap.success = true
-      swap.args = { base, quote, poolIdx, isBuy, inBaseQty, qty, tip: 0, limitPrice }
-      swap.output = inBaseQty ? quoteFlow : baseFlow
-      swap.result = isBuy ? quoteFlow * -1n : baseFlow * -1n
-      const outToken =
-        swap.output = inBaseQty ^ isBuy ? swap.output : swap.output * -1n
-      swap.priceAfter = finalPrice
-      swap.slipDirection = inBaseQty ^ isBuy ? 1 : -1
-      const slipBps = BigInt(parseInt(slippage * 100) * swap.slipDirection)
-      const priceSlipBps = BigInt(parseInt(slippage * 100) * (isBuy ? 1 : -1))
-      const scaler = 1000000000n  // i can't math and i can't integer math even more
-      swap.minOut = swap.output + ((swap.output * scaler) / 10000n * slipBps) / scaler
-      // this seems like a hack but it should work fine until normal swaps get fixed
-      swap.args.limitPrice = finalPrice + ((finalPrice * scaler) / 10000n * priceSlipBps) / scaler
-      console.log('prices', finalPrice, swap.args.limitPrice)
       return swap
     },
     relayButtonDisabled: function (scmd) {
@@ -1577,9 +1589,10 @@ export default {
     address: function (address) {
       console.log('got address', address)
       if (address) {
+        this.resetData(false)
         this.refreshData(address)
       } else {
-        this.resetData()
+        this.resetData(false)
       }
     },
   },
@@ -1597,9 +1610,10 @@ export default {
       this.refreshTicker = setInterval(async () => {
         if (Date.now() - this.lastRefresh < REFRESH_PERIOD || this.autoRefreshPaused)
           return
-        await this.refreshData()
+        if (this.chain && this.address)
+          await this.refreshData()
         this.lastRefresh = Date.now()
-      }, 500);
+      }, 1000);
     document.addEventListener('visibilitychange', this.onVisibilityChange)
     this.fetchTokens()
   },

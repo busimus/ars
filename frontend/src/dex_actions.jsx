@@ -45,6 +45,7 @@ export const COMMANDS = {
     _toQtyRaw: 0n,
     _slippage: 0.5,
     _estimate: null,
+    _estimateTime: 0,
     ...cloneDeep(BASE_COMMAND),
   },
   withdraw: {

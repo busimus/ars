@@ -169,7 +169,7 @@
               required></b-form-select>
           </b-form-group>
         </div> -->
-        <div style="display: flex; gap: 0.4rem">
+        <div style="display: flex; gap: 0.6rem">
           <b-form-group id="input-group-removeLp-qtyPct" :label="'Amount: ' + action._qtyPct + '%'"
             label-for="input-removeLp-qtyPct" style="flex: 2;" required>
             <b-form-input id="input-removeLp-qtyPct" v-model="action._qtyPct" placeholder="0" type="range" min=1 max=100
@@ -182,18 +182,20 @@
               step="0.1" min="0.2" @change="setSlippageLimits" required></b-form-input>
           </b-form-group>
         </div>
-        <div class="border rounded text-center p-2"
-          v-if="['removeConcLp', 'removeAmbLp'].includes(actionType) && poolFilled">
-          <div v-if="poolValid">
-            Approximate removed amounts:
-            <br />
-            {{ lpRemovedBaseTokens }} {{ tokens[action.base].symbol }}
-            <br />
-            {{ lpRemovedQuoteTokens }} {{ tokens[action.quote].symbol }}
+        <div class="border rounded p-2"
+          v-if="['removeConcLp', 'removeAmbLp'].includes(actionType) && poolFilled && poolValid"
+          style="display: flex; flex-direction:column; gap: 0.25rem; margin-top: 0rem">
+          <div style="display: flex; justify-content: space-between;">
+            <span style="margin: auto 0; padding: 0.1rem 0;">Removed base</span><span>{{ lpRemovedBaseTokens }} {{
+              tokens[action.base].symbol }}</span>
           </div>
-          <div v-else>
-            Pool not found
+          <div style="display: flex; justify-content: space-between;">
+            <span style="margin: auto 0; padding: 0.1rem 0;">Removed quote</span><span>{{ lpRemovedQuoteTokens }} {{
+              tokens[action.quote].symbol }}</span>
           </div>
+        </div>
+        <div v-else-if="poolValid == false" class="border rounded text-center text-danger p-2">
+          Pool not found
         </div>
       </div>
       <div v-else class="text-center">
@@ -401,6 +403,8 @@ export default {
       if (qtyFrom === '' || qtyTo === '') {
         this.action._fromQty = null
         this.action._toQty = null
+        this.action._estimate = null
+        this.action._estimateTime = Date.now()
         return
       }
       if (typeof (qtyFrom) == 'string')
@@ -412,62 +416,74 @@ export default {
       }
       if (!this.action._fromToken || !this.action._toToken)
         return
+      let fromQtyRaw, toQtyRaw
       if (qtyFrom > 0) {
-        this.action._fromQtyRaw = parseUnits(qtyFrom, this.tokens[this.action._fromToken].decimals)
+        fromQtyRaw = parseUnits(qtyFrom, this.tokens[this.action._fromToken].decimals)
         this.action._toQty = '...'
         this.action._toQtyRaw = 0
       } else if (qtyTo > 0) {
-        this.action._toQtyRaw = parseUnits(qtyTo, this.tokens[this.action._toToken].decimals)
+        toQtyRaw = parseUnits(qtyTo, this.tokens[this.action._toToken].decimals)
         this.action._fromQty = '...'
         this.action._fromQtyRaw = 0
       } else {
         return
       }
       this.swapDebouncer += 1
-      console.log('swapInput', this.swapDebouncer)
+      const reqTime = Date.now()
       if (this.swapDebouncer <= 1) {
-        this.maybeGetSwapOutput(this.action._fromQtyRaw, this.action._toQtyRaw)
+        this.action._fromQtyRaw = fromQtyRaw
+        this.action._toQtyRaw = toQtyRaw
+        this.maybeGetSwapOutput(fromQtyRaw, toQtyRaw, reqTime)
       } else {
         setTimeout(() => {
           this.swapDebouncer -= 1
-          this.maybeGetSwapOutput(this.action._fromQtyRaw, this.action._toQtyRaw)
+          this.action._fromQtyRaw = fromQtyRaw
+          this.action._toQtyRaw = toQtyRaw
+          this.maybeGetSwapOutput(fromQtyRaw, toQtyRaw, reqTime)
         }, 200)
       }
     },
     invertSwap: function () {
-      console.log('inverting');
       [this.action._fromQty, this.action._toQty] = [this.action._toQty, this.action._fromQty];
       [this.action._fromToken, this.action._toToken] = [this.action._toToken, this.action._fromToken];
       this.swapInputHandler(this.action._fromQty, 0)
     },
+    refreshSwap: async function() {
+      if (this.actionType == 'swap')
+        this.swapInputHandler(this.action._fromQty, this.action._toQty)
+    },
     setSwapToken: function (side, address) {
       console.log('side', side, address, this.action._fromToken, this.action._toToken)
       if (side == 'from') {
-        // console.log('f', this.action._toToken == address)
         if (this.action._toToken == address)
           return
+        this.action._fromQty = null
+        this.action._fromQtyRaw = 0n
         this.action._fromToken = address
       } else if (side == 'to') {
-        // console.log('t', this.action._toToken == address)
         if (this.action._fromToken == address)
           return
+        this.action._toQty = null
+        this.action._toQtyRaw = 0n
         this.action._toToken = address
       }
-      this.action._fromQty = null
-      this.action._fromQtyRaw = 0n
-      this.action._toQty = null
-      this.action._toQtyRaw = 0n
       this.action._estimate = null
-      this.maybeGetSwapOutput(this.action._fromQtyRaw, this.action._toQtyRaw)
+      this.action._estimateTime = Date.now()
+      this.maybeGetSwapOutput(this.action._fromQtyRaw, this.action._toQtyRaw, Date.now())
     },
-    maybeGetSwapOutput: async function (qtyFrom, qtyTo) {
-      // console.log('maybeGet', this.swapDebouncer, qtyFrom, qtyTo)
+    maybeGetSwapOutput: async function (qtyFrom, qtyTo, reqTime) {
+      console.log('maybeGet', this.swapDebouncer, qtyFrom, qtyTo)
       if (this.swapDebouncer > 1 || (!qtyFrom && !qtyTo))
         return
 
       const swap = await this.fetchSwapOutput(this.action._fromToken, this.action._toToken, this.action.poolIdx, qtyFrom, qtyTo, this.action._slippage)
       console.log('swapOutput', swap)
+      if (this.action._estimateTime > reqTime) {
+        console.log('stale swap output, dropping')
+        return
+      }
       this.action._estimate = swap
+      this.action._estimateTime = reqTime
       if (!swap.success) {
         return
       }
@@ -483,6 +499,10 @@ export default {
       const pool = this.pools[poolKey(this.action)]
       if (!pool)
         return
+      if (this.action._slippage > 99)
+        this.action._slippage = 99
+      if (this.action._slippage < 0.1)
+        this.action._slippage = 0.1
       // these are obviously swapped but that's the only way it works lmao
       const lowLimit = pool.price * (1 + this.action._slippage / 100)
       const highLimit = pool.price * (1 - this.action._slippage / 100)
@@ -492,10 +512,6 @@ export default {
       this.action.limitLower = encodeCrocPrice(encodedLower).toString()
       const encodedHigher = fromDisplayPrice(highLimit, this.action._baseDecimals, this.action._quoteDecimals, true)
       this.action.limitHigher = encodeCrocPrice(encodedHigher).toString()
-    },
-    setSwapSlippage: function () {
-      // this.action.minOut = this.action._estimate
-
     },
     describe: function () {
       const a = this.action;
@@ -565,7 +581,6 @@ export default {
           console.warn('no estimate for the swap')
           return
         }
-        this.setSwapSlippage()
       } else if (this.actionType == 'deposit') {
         if (!this.action.recv || this.action._gasless)
           this.action.recv = this.address

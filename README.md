@@ -27,6 +27,7 @@ The project is deployed at: [https://ars.bus.bz](https://ars.bus.bz)
 ## TODO
 * Limit orders
 * LP management/creation
+* Ensure commands can be created and executed even if indexers are offline
 * Self hosted indexer and graph node
 
 ## Attributions
