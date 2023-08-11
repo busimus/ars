@@ -28,8 +28,8 @@ const RELAY_SPEC = {
     5: [ZERO_ADDRESS, "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "0xdc31Ee1784292379Fbb2964b3B9C4124D8F89C60", "0xc04b0d3107736c32e19f1c62b2af67be61d63a05"]
   },
   tipRecv: [numberToHex(256, { size: 20 }), '0x09784d03b42581cfc4fc90a7ab11c3125dedeb86', '0xb4fdaf8e6636e7394f6ae768c5fa9d2e5bf6f0dc'],
-  tipThreshold: 0.93,  // actual tip must at least cover this amount of gasFee
-  maxFeePerGasIncrease: {1: 1.25, 5: 5},  // multiplies current gas by this number, based on chainId
+  tipThreshold: 0.85,  // actual tip must at least cover this amount of gasFee
+  maxFeePerGasIncrease: { 1: 1.25, 5: 5 },  // multiplies current gas by this number, based on chainId
 }
 
 const ALREADY_SENT = {}

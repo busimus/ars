@@ -85,6 +85,8 @@ export const COMMANDS = {
     poolIdx: null,
     bidTick: null,
     askTick: null,
+    _rangeMin: 0.0, // human string with desimal point
+    _rangeMax: 0.0,
     qty: null,
     limitLower: null,
     limitHigher: null,

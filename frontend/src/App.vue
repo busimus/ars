@@ -144,14 +144,17 @@
               <b-button @click=removeTip(scmd) variant="light"><b-icon-trash /></b-button>
             </div>
 
-            <b-form-checkbox id="checkbox-relayManually" v-model="scmd._action._relayManually" name="checkbox-relayer"
-              class="mb-2">
-              Send manually <b-icon-question-circle id="relayManuallyQuestion" />
-            </b-form-checkbox>
-            <b-tooltip target="relayManuallyQuestion" triggers="hover">
-              Send the TX from the connected address.<br /> You can connect any address right now, as long as it has ETH
-              for gas.
-            </b-tooltip>
+            <div style="display: flex; justify-content: center;">
+              <b-form-checkbox id="checkbox-relayManually" switch v-model="scmd._action._relayManually"
+                name="checkbox-relayer" class="mb-2">
+                Send manually
+              </b-form-checkbox>
+              <b-icon-question-circle id="relayManuallyQuestion" style="margin: 0.3rem 0 0 0.3rem" />
+              <b-tooltip target="relayManuallyQuestion" triggers="hover">
+                Send the TX from the connected address.<br /> You can connect any address right now, as long as it has ETH
+                for gas.
+              </b-tooltip>
+            </div>
             <b-button ref="relayButton" :variant="relaying ? 'outline-success' : 'success'" size="lg" style="width: 100%"
               type=submit :disabled="relayButtonDisabled(scmd)">
               <div v-if="relaying" class="load-spinner spinner-border spinner-border-md" role="status">

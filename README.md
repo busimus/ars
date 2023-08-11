@@ -1,8 +1,8 @@
 # Ambient Relay Service
 
-This is an alternative frontend for [Ambient Finance](https://ambient.finance) that has a gasless transaction relayer. It allows users to execute DEX commands without needing gas on their address if they have enough tokens on their DEX balance to cover the gas.
+This is an alternative frontend for [Ambient Finance](https://ambient.finance) that has a gasless transaction relayer. It allows users to execute Ambient DEX commands without needing gas on their address if they have enough tokens on their DEX balance to cover the gas.
 
-The project is deployed at: [https://ars.bus.bz](https://ars.bus.bz)
+The project is deployed at [https://ars.bus.bz](https://ars.bus.bz) and works with Ethereum mainnet and Goerli testnet.
 
 ## Features
 * Supports balance withdrawal/transfer, LP removal, swaps, deposits (EIP-2612)

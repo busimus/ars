@@ -149,26 +149,17 @@
           </div>
         </b-form-group>
         <div v-if="actionType == 'removeConcLp'" style="display: flex; gap: 0.4rem">
-          <b-form-group id="input-group-removeLp-bidTick" label="Bid tick" label-for="input-removeLp-bidTick"
+          <b-form-group id="input-group-removeLp-bidTick" label="Range min" label-for="input-removeLp-bidTick"
             style="flex: 1;" required>
-            <b-form-input id="input-removeLp-bidTick" v-model="action.bidTick" placeholder="0" required></b-form-input>
+            <b-form-input id="input-removeLp-bidTick" v-model="action._rangeMin" @change="reparseTick('min')"
+              placeholder="0.0" required></b-form-input>
           </b-form-group>
-          <b-form-group id="input-group-removeLp-askTick" label="Ask tick" label-for="input-removeLp-askTick"
+          <b-form-group id="input-group-removeLp-askTick" label="Range max" label-for="input-removeLp-askTick"
             style="flex: 1;" required>
-            <b-form-input id="input-removeLp-askTick" v-model="action.askTick" placeholder="0" required></b-form-input>
+            <b-form-input id="input-removeLp-askTick" v-model="action._rangeMax" @change="reparseTick('max')"
+              placeholder="0.0" required></b-form-input>
           </b-form-group>
         </div>
-        <!-- <div style="display: flex; gap: 0.4rem">
-          <b-form-group id="input-group-removeLp-poolIdx" label="Pool index" label-for="input-removeLp-poolIdx"
-            style="flex: 1;" required>
-            <b-form-input id="input-removeLp-poolIdx" v-model="action.poolIdx" placeholder="420" required></b-form-input>
-          </b-form-group>
-          <b-form-group id="input-group-removeLp-settleFlags" label="Settle output" label-for="input-removeLp-settleFlags"
-            style="flex: 2;" required>
-            <b-form-select id="input-removeLp-settleFlags" v-model="action.settleFlags" :options="SETTLE_FLAGS"
-              required></b-form-select>
-          </b-form-group>
-        </div> -->
         <div style="display: flex; gap: 0.6rem">
           <b-form-group id="input-group-removeLp-qtyPct" :label="'Amount: ' + action._qtyPct + '%'"
             label-for="input-removeLp-qtyPct" style="flex: 2;" required>
@@ -208,7 +199,7 @@
         </b-form-checkbox>
         <b-icon-question-circle id="gaslessQuestion" style="margin: 0.5rem 0 0 0.5rem" />
         <b-tooltip target="gaslessQuestion" triggers="hover">
-          You'll have tip a relayer from your DEX balance
+          You'll need to tip the relayer from your DEX balance
         </b-tooltip>
       </div>
       <b-button type="submit" v-if="actionType" :variant="sendButtonVariant()" size="lg"
@@ -252,7 +243,7 @@ import CoinSelector from "./CoinSelector.vue"
 
 import cloneDeep from "lodash.clonedeep";
 import { parseUnits, formatUnits } from "viem"
-import { fromDisplayPrice, encodeCrocPrice } from '@crocswap-libs/sdk'
+import { fromDisplayPrice, encodeCrocPrice, tickToPrice, priceToTick, toDisplayPrice } from '@crocswap-libs/sdk'
 import { getFormattedNumber } from "../number_formatting.jsx"
 import { COMMANDS } from '../dex_actions.jsx'
 import { isValidAddress, lpBaseTokens, lpQuoteTokens, poolKey } from '../utils.jsx'
@@ -330,6 +321,10 @@ export default {
         this.action = { ...action };
         if (this.action._type == 'swap')
           this.preFillSwapTokens()
+        else if (this.action._type == 'removeConcLp') {
+          this.reparseTick('min')
+          this.reparseTick('max')
+        }
       })
       // all of these don't work:
       // this.action = Object.assign({}, this.action, {...action})
@@ -352,6 +347,27 @@ export default {
       } catch {
         this.action[field] = null
       }
+    },
+    // converts action._rangeMin to action.bidTick or whatever depending on side
+    reparseTick: function (side) {
+      const pool = this.pools[poolKey(this.action)]
+      if (!pool)
+        return
+      const baseDec = this.tokens[this.action.base].decimals
+      const quoteDec = this.tokens[this.action.quote].decimals
+      console.log(side, this.action._rangeMin, this.action._rangeMax)
+
+      let price = 0
+      let tick = this.action[side == 'min' ? 'askTick' : 'bidTick']
+      if ((side == 'min' ? this.action._rangeMin : this.action._rangeMax) > 0) {
+        price = fromDisplayPrice(parseFloat(side == 'min' ? this.action._rangeMin : this.action._rangeMax), baseDec, quoteDec, true)
+        tick = priceToTick(price)
+        this.action[side == 'min' ? 'askTick' : 'bidTick'] = tick
+      }
+
+      const reprice = toDisplayPrice(tickToPrice(tick), baseDec, quoteDec, true)
+      console.log(price, tick, reprice)
+      this.action[side == 'min' ? '_rangeMin' : '_rangeMax'] = reprice
     },
     setRecvToSelf: function () {
       this.action.recv = this.address
@@ -448,7 +464,7 @@ export default {
       [this.action._fromToken, this.action._toToken] = [this.action._toToken, this.action._fromToken];
       this.swapInputHandler(this.action._fromQty, 0)
     },
-    refreshSwap: async function() {
+    refreshSwap: async function () {
       if (this.actionType == 'swap')
         this.swapInputHandler(this.action._fromQty, this.action._toQty)
     },
@@ -699,15 +715,21 @@ export default {
     },
     lpRemovedBaseTokens: function () {
       if (this.poolValid)
-        return lpBaseTokens(this.action, this.pools[poolKey(this.action)], this.action._qtyPct, true)
-      else
-        return 0
+        try {
+          return lpBaseTokens(this.action, this.pools[poolKey(this.action)], this.action._qtyPct, true)
+        } catch (e) {
+          console.error('lpRemovedBaseTokens error', e)
+        }
+      return 0
     },
     lpRemovedQuoteTokens: function () {
       if (this.poolValid)
-        return lpQuoteTokens(this.action, this.pools[poolKey(this.action)], this.action._qtyPct, true)
-      else
-        return 0
+        try {
+          return lpQuoteTokens(this.action, this.pools[poolKey(this.action)], this.action._qtyPct, true)
+        } catch (e) {
+          console.error('lpRemovedBaseTokens error', e)
+        }
+      return 0
     },
   },
   mounted: function () {
