@@ -895,7 +895,7 @@ export default {
         // If settling to dex estimate whether the removed amount is enough.
         // The removed LP must be at least 2% larger than tip.
         const minRatio = 1.02
-        if (a.settleFlags == SETTLE_TO_DEX) {
+        if (a.settleFlags == SETTLE_TO_DEX || (a.settleFlags == BASE_TO_DEX && a.base == tip.token) || (a.settleFlags == QUOTE_TO_DEX && a.quote == tip.token)) {
           if ((a.base == tip.token && baseRatio > minRatio) || (a.quote == tip.token && quoteRatio > minRatio)) {
             return true
           }

@@ -18,7 +18,7 @@ import { decodeCrocPrice } from './utils.mjs';
 
 const TRANSPORTS = {
   1: { http: http("https://rpc.flashbots.net/?builder=flashbots&builder=f1b.io&builder=rsync&builder=beaverbuild.org&builder=builder0x69&builder=titan&builder=eigenphi&builder=boba-builder"), tx: http("https://rpc.flashbots.net/?builder=flashbots&builder=f1b.io&builder=rsync&builder=beaverbuild.org&builder=builder0x69&builder=titan&builder=eigenphi&builder=boba-builder"), chain: mainnet },
-  5: { http: http("https://goerli.infura.io/v3/afea1acbc0be4ad7bf22a841a0e7ef63"), tx: http("https://goerli.infura.io/v3/afea1acbc0be4ad7bf22a841a0e7ef63"), chain: goerli },
+  5: { http: http(`https://goerli.infura.io/v3/${process.env.INFURA_KEY}`), tx: http(`https://goerli.infura.io/v3/${process.env.INFURA_KEY}`), chain: goerli },
 }
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
