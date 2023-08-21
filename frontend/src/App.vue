@@ -48,7 +48,9 @@
           <div v-if="chainError" class="text-danger" style="margin-top: 0.5rem">
             Your network is not supported!
             <br />
-            Connect with Mainnet or Goerli Testnet to proceed.
+            Switch to Ethereum or Goerli Testnet to proceed.
+            <br />
+            <b-button variant="primary" size="md" @click="switchToChain(1)" style="margin-top: 0.5rem;">Switch to Ethereum</b-button>
           </div>
           <div v-for="(status, hash) in waitingHashes"
             style="display: flex; align-items: center; justify-content: space-between; padding-top: 1rem; gap: 0.5rem;">
@@ -135,7 +137,8 @@
                   <b-icon-arrow-clockwise v-else :class="{ 'icon-spin': estimating }" />
                 </b-button>
               </div>
-              <small class="form-text text-muted text-center mb-2">Will be deducted from your exchange balance (or the command size will be reduced to ensure you have enough left)</small>
+              <small class="form-text text-muted text-center mb-2">Will be deducted from your exchange balance (or the
+                command size will be reduced to ensure you have enough left)</small>
             </b-form-group>
             <div id="attached-tip" v-if="scmd._action.tip.amount" style="display: flex; align-items: center; gap: 0.5rem">
               <span style="height: fit-content">Attached tip: {{ this.tipAmountHuman(scmd._action.tip) }}</span>
@@ -1537,6 +1540,10 @@ export default {
       this.ensName = ensName
       if (this.ensName && !this.ensAvatar)
         this.ensAvatar = await client.getEnsAvatar({ name: normalize(this.ensName) })
+    },
+    switchToChain: async function(id) {
+      const wallet = await getWalletClient({ chainId: this.chainId })
+      await wallet.switchChain({id})
     },
     removeTip: function (scmd) {
       scmd.tip = '0x'
