@@ -79,6 +79,8 @@ export function getSomeTokenForChain(chainId) {
     return "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
   else if (chainId == 5)
     return "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c"
+  else if (chainId == 7700)
+    return "0xee602429ef7ece0a13e4ffe8dbc16e101049504c"
   else if (chainId == 42161)
     return "0xaf88d065e77c8cc2239327c5edb3a432268e5831"
   else if (chainId == 421613)

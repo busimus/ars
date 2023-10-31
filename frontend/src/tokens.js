@@ -178,6 +178,35 @@ export const TOKENS = {
             "logoURI": "https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png"
         }
     },
+    7700: {
+        "0x0000000000000000000000000000000000000000": {
+            "name": "Canto",
+            "address": "0x0000000000000000000000000000000000000000",
+            "symbol": "CANTO",
+            "nameLower": "native canto",
+            "symbolLower": "canto",
+            "decimals": 18,
+            "logoURI": "https://raw.githubusercontent.com/cosmos/chain-registry/master/canto/images/canto.svg"
+        },
+        "0xee602429ef7ece0a13e4ffe8dbc16e101049504c": {
+            "name": "cNote",
+            "address": "0xee602429ef7ece0a13e4ffe8dbc16e101049504c",
+            "symbol": "cNOTE",
+            "nameLower": "cnote",
+            "symbolLower": "cnote",
+            "decimals": 18,
+            "logoURI": "https://raw.githubusercontent.com/Plex-Engineer/public-assets/main/icons/tokens/cNote.svg"
+        },
+        "0x80b5a32e4f032b2a058b4f29ec95eefeeb87adcd": {
+            "name": "USDC via channel 0",
+            "address": "0x80b5a32e4f032b2a058b4f29ec95eefeeb87adcd",
+            "symbol": "USDC",
+            "nameLower": "usdc via channel 0",
+            "symbolLower": "usdc",
+            "decimals": 6,
+            "logoURI": "https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png"
+        },
+    },
     534351: {
         "0x0000000000000000000000000000000000000000": {
             "name": "Native Ether",

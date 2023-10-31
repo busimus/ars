@@ -92,9 +92,28 @@ const SCROLL_SEPOLIA_CHAIN = {
   blockExplorer: "https://sepolia.scrollscan.dev/",
 }
 
+const CANTO_CHAIN = {
+  addrs: {
+    dex: "0x9290C893ce949FE13EF3355660d07dE0FB793618",
+    query: "0xfDf5Ed2D354e05cF292808CF94Bd5c972D842D09",
+    impact: "0x97B4957BA07914c563a58C1E6c69588f9cCfC051"
+  },
+  poolIndex: 36000,
+  chainId: 7700,
+  gridSize: 16,
+  proxyPaths: {
+    cold: 3,
+    long: 4,
+    liq: 2
+  },
+  blockExplorer: "https://tuber.build/",
+  geckoChainString: "canto"
+}
+
 export const CROC_CHAINS = {
   1: MAINNET_CHAIN,
   5: GOERLI_CHAIN,
+  7700: CANTO_CHAIN,
   421613: ARB_GOERLI_CHAIN,
   534351: SCROLL_SEPOLIA_CHAIN,
   534352: SCROLL_CHAIN,

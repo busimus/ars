@@ -214,9 +214,9 @@ import {
 import { EthereumClient, w3mConnectors, w3mProvider } from '@web3modal/ethereum'
 import { Web3Modal } from '@web3modal/html'
 import { configureChains, createConfig, getPublicClient, getWalletClient, fetchToken, fetchBalance } from '@wagmi/core'
-import { mainnet, arbitrum, scroll, goerli, arbitrumGoerli, scrollSepolia } from '@wagmi/core/chains'
+import { mainnet, arbitrum, scroll, canto, goerli, arbitrumGoerli, scrollSepolia } from '@wagmi/core/chains'
 
-const chains = [mainnet, scroll, goerli, arbitrumGoerli, scrollSepolia]
+const chains = [mainnet, scroll, canto, goerli, arbitrumGoerli, scrollSepolia]
 const projectId = '8978c906351c8a4e3eccd85a700306ab'
 
 const { publicClient } = configureChains(chains, [w3mProvider({ projectId })], { batch: { multicall: true, wait: 16 } })
@@ -260,6 +260,7 @@ const RELAYERS = {
     acceptedTipTokens: {
       1: ["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", ZERO_ADDRESS, "0xdac17f958d2ee523a2206206994597c13d831ec7", "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", "0x6b175474e89094c44da98b954eedeac495271d0f"],
       5: [ZERO_ADDRESS, "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "0xdc31Ee1784292379Fbb2964b3B9C4124D8F89C60", "0xc04b0d3107736c32e19f1c62b2af67be61d63a05"],
+      7700: [ZERO_ADDRESS, "0x80b5a32e4f032b2a058b4f29ec95eefeeb87adcd"],
       42161: [ZERO_ADDRESS, "0xaf88d065e77c8cc2239327c5edb3a432268e5831", "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f"],
       421613: [ZERO_ADDRESS, "0xc944b73fba33a773a4a07340333a3184a70af1ae", "0x5263e9d82352b8098cc811164c38915812bfc1e3", "0xc52f941486978a25fad837bb701d3025679780e4"],
       534351: [ZERO_ADDRESS, '0x4d65fb724ced0cfc6abfd03231c9cdc2c36a587b'],
@@ -332,7 +333,7 @@ export default {
       RELAYERS,
       TOKENS,
       CHAINS: CROC_CHAINS,
-      COLD_TOKENS: { 1: {}, 5: {}, 42161: {}, 421613: {},  534351: {}, 534352: {} },
+      COLD_TOKENS: { 1: {}, 5: {}, 7700: {}, 42161: {}, 421613: {},  534351: {}, 534352: {} },
 
       ethBalance: '',
       ensName: null,
@@ -982,7 +983,12 @@ export default {
         const gasInETH = formatEther(gasInWei)
 
         if (tipTokens.indexOf(ZERO_ADDRESS) != -1) {
-          tipOptions[ZERO_ADDRESS] = { token: ZERO_ADDRESS, text: `${parseFloat(gasInETH).toFixed(6)} ETH`, amount: gasInWei.toString() }
+          let symbol = 'ETH'
+          if ([goerli.id, scrollSepolia.id, arbitrumGoerli.id].includes(this.chainId))
+            symbol = 'gETH'
+          else if (this.chainId == canto.id)
+            symbol = 'CANTO'
+          tipOptions[ZERO_ADDRESS] = { token: ZERO_ADDRESS, text: `${parseFloat(gasInETH).toFixed(6)} ${symbol}`, amount: gasInWei.toString() }
         }
 
         const prices = await this.getPrices(tipTokens, ZERO_ADDRESS)
@@ -1088,7 +1094,7 @@ export default {
         verifyingContract: CROC_CHAINS[this.chainId].addrs.dex
       }
 
-      if ([1, 42161, 421613, 534351, 534352].indexOf(this.chainId) != -1)
+      if ([5].indexOf(this.chainId) == -1)
         domain.version = '1.0'
 
       const types = {
@@ -1561,7 +1567,11 @@ export default {
       const client = getPublicClient()
       let [ensName, balance] = await Promise.allSettled([client.getEnsName({ address: this.address }), client.getBalance({ address: this.address })]);
 
-      const symbol = [mainnet.id, arbitrum.id, scroll.id].includes(this.chainId) ? 'ETH' : 'gETH'
+      let symbol = 'ETH'
+      if ([goerli.id, scrollSepolia.id, arbitrumGoerli.id].includes(this.chainId))
+        symbol = 'gETH'
+      else if (this.chainId == canto.id)
+        symbol = 'CANTO'
       if (balance.status == 'fulfilled')
         this.ethBalance = `${getFormattedNumber(parseFloat(formatEther(balance.value)))} ${symbol}`
       if (ensName.status == 'fulfilled')
