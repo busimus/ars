@@ -50,7 +50,8 @@
             <br />
             Switch to Ethereum or Goerli Testnet to proceed.
             <br />
-            <b-button variant="primary" size="md" @click="switchToChain(1)" style="margin-top: 0.5rem;">Switch to Ethereum</b-button>
+            <b-button variant="primary" size="md" @click="switchToChain(1)" style="margin-top: 0.5rem;">Switch to
+              Ethereum</b-button>
           </div>
           <div v-for="(status, hash) in waitingHashes"
             style="display: flex; align-items: center; justify-content: space-between; padding-top: 1rem; gap: 0.5rem;">
@@ -92,7 +93,7 @@
         <ActionInput class="main-panel border shadow-sm rounded" style="height: auto; width: inherit" ref="actionInput"
           @perform="performAction" @fetchToken="a => fetchTokenInfo(a, true)"
           @fetchWalletBalance="a => fetchWalletBalance(a)" @approve="sendApproveTx" :fetchSwapOutput="fetchSwapOutput"
-          :pools="pools" :tokens="TOKENS[chainId]" :coldTokens="COLD_TOKENS" :balances="balances"
+          :pools="pools" :tokens="TOKENS[chainId]" :coldTokens="COLD_TOKENS[chainId]" :balances="balances"
           :walletBalances="walletBalances" :allowances="allowances" :address="address" :signing="signing"
           :canSign="canSign" :crocChain="CHAINS[chainId]" />
       </div>
@@ -213,9 +214,9 @@ import {
 import { EthereumClient, w3mConnectors, w3mProvider } from '@web3modal/ethereum'
 import { Web3Modal } from '@web3modal/html'
 import { configureChains, createConfig, getPublicClient, getWalletClient, fetchToken, fetchBalance } from '@wagmi/core'
-import { mainnet, goerli } from '@wagmi/core/chains'
+import { mainnet, arbitrum, scroll, goerli, arbitrumGoerli, scrollSepolia } from '@wagmi/core/chains'
 
-const chains = [mainnet, goerli]
+const chains = [mainnet, scroll, goerli, arbitrumGoerli, scrollSepolia]
 const projectId = '8978c906351c8a4e3eccd85a700306ab'
 
 const { publicClient } = configureChains(chains, [w3mProvider({ projectId })], { batch: { multicall: true, wait: 16 } })
@@ -233,7 +234,7 @@ import cloneDeep from 'lodash.clonedeep'
 import * as Sentry from "@sentry/browser";
 
 import { watchAccount, watchNetwork, signTypedData } from '@wagmi/core'
-import { encodeAbiParameters, toHex, numberToHex, hexToBigInt, formatUnits, formatEther, UserRejectedRequestError, parseUnits, parseEther } from 'viem'
+import { encodeAbiParameters, toHex, numberToHex, hexToBigInt, formatUnits, formatEther, UserRejectedRequestError, parseUnits, parseEther, encodeFunctionData } from 'viem'
 import { normalize } from 'viem/ens'
 import { signERC2612Permit } from './permit.jsx'
 
@@ -241,7 +242,7 @@ import ExchangePositions from './components/ExchangePositions.vue'
 import ActionInput from './components/ActionInput.vue'
 import { GraphcacheProvider, GRAPHCACHE_PROVIDERS } from './graphcache_provider.js'
 import { getFormattedNumber } from './number_formatting.jsx'
-import { lpBaseTokens, lpQuoteTokens } from './utils.jsx'
+import { lpBaseTokens, lpQuoteTokens, getSomeTokenForChain } from './utils.jsx'
 import { CROC_CHAINS } from './constants.js'
 import { CROC_ABI } from './abis/croc.js'
 import { QUERY_ABI } from './abis/query.js'
@@ -258,7 +259,11 @@ const RELAYERS = {
     endpoint: 'https://relayer.bus.bz/',
     acceptedTipTokens: {
       1: ["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", ZERO_ADDRESS, "0xdac17f958d2ee523a2206206994597c13d831ec7", "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", "0x6b175474e89094c44da98b954eedeac495271d0f"],
-      5: [ZERO_ADDRESS, "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "0xdc31Ee1784292379Fbb2964b3B9C4124D8F89C60", "0xc04b0d3107736c32e19f1c62b2af67be61d63a05"]
+      5: [ZERO_ADDRESS, "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "0xdc31Ee1784292379Fbb2964b3B9C4124D8F89C60", "0xc04b0d3107736c32e19f1c62b2af67be61d63a05"],
+      42161: [ZERO_ADDRESS, "0xaf88d065e77c8cc2239327c5edb3a432268e5831", "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f"],
+      421613: [ZERO_ADDRESS, "0xc944b73fba33a773a4a07340333a3184a70af1ae", "0x5263e9d82352b8098cc811164c38915812bfc1e3", "0xc52f941486978a25fad837bb701d3025679780e4"],
+      534351: [ZERO_ADDRESS, '0x4d65fb724ced0cfc6abfd03231c9cdc2c36a587b'],
+      534352: [ZERO_ADDRESS, "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4"],
     }
   }
 }
@@ -270,6 +275,7 @@ const REFRESH_PERIOD = 30000
 
 // hot path swaps aren't supported for now
 const LONG_PATH_SWAP = true
+
 
 export default {
   name: "App",
@@ -326,7 +332,7 @@ export default {
       RELAYERS,
       TOKENS,
       CHAINS: CROC_CHAINS,
-      COLD_TOKENS: {},
+      COLD_TOKENS: { 1: {}, 5: {}, 42161: {}, 421613: {},  534351: {}, 534352: {} },
 
       ethBalance: '',
       ensName: null,
@@ -347,9 +353,10 @@ export default {
       this.chain = network
       if (network.chain) {
         this.resetData(true) // before chainId because some components depend on it
-        if ([1, 5].includes(network.chain.id)) {
+        if (chains.map((c) => c.id).includes(network.chain.id)) {
           this.chainError = false
           this.chainId = network.chain.id
+          this.fetchTokens(this.chainId)
         } else {
           this.chainError = true
         }
@@ -490,7 +497,7 @@ export default {
     buildLongSwapCmd: function (action) {
       console.log('long', action)
       const a = action._estimate.args
-      const callpath = 4
+      const callpath = CROC_CHAINS[this.chainId].proxyPaths.long
 
       console.log('opening order', action._fromToken)
       const order = new OrderDirective(action._fromToken)
@@ -515,7 +522,7 @@ export default {
     },
     buildRemoveConcLpCmd: function (action) {
       console.log(action)
-      const callpath = 2
+      const callpath = CROC_CHAINS[this.chainId].proxyPaths.liq
       const qty = roundForConcLiq(BigNumber.from(BigInt(action.qty) * BigInt(action._qtyPct) / 100n))
       const cmd = encodeAbiParameters(
         [
@@ -538,7 +545,7 @@ export default {
     },
     buildRemoveAmbLpCmd: function (action) {
       console.log(action)
-      const callpath = 2
+      const callpath = CROC_CHAINS[this.chainId].proxyPaths.liq
       const WITHDRAW_ALL = 0xffffffffffffffffffffffffffffffffn // from ambient-ts-app
       let qty = action._qtyPct == 100 ? WITHDRAW_ALL : BigNumber.from(BigInt(action.qty) * BigInt(action._qtyPct) / 100n)
       console.log(qty)
@@ -562,7 +569,7 @@ export default {
       return { callpath, cmd, _action: action }
     },
     buildWithdrawSurplusCmd: function (action, withdraw = true) {
-      const callpath = CROC_CHAINS[this.chainId].withdrawCallpath
+      const callpath = CROC_CHAINS[this.chainId].proxyPaths.cold
       const cmd = encodeAbiParameters(
         [
           { name: 'code', type: 'uint8' },
@@ -606,7 +613,7 @@ export default {
       this.signing = false
     },
     buildDepositCmd: function (action) {
-      const callpath = CROC_CHAINS[this.chainId].depositCallpath
+      const callpath = CROC_CHAINS[this.chainId].proxyPaths.cold
 
       const cmd = encodeAbiParameters(
         [
@@ -620,7 +627,7 @@ export default {
       return { callpath, cmd, _action: action, value: action.token == ZERO_ADDRESS ? action._qtyRaw : 0n }
     },
     buildDepositWithPermitCmd: function (action) {
-      const callpath = CROC_CHAINS[this.chainId].depositPermitCallpath
+      const callpath = CROC_CHAINS[this.chainId].proxyPaths.cold
 
       // console.log([83, action.recv, action._qtyRaw, action.token, action.permit.deadline,
       //   action.permit.v, action.permit.r, action.permit.s])
@@ -961,19 +968,19 @@ export default {
       try {
         const relayer = RELAYERS[signedCmd._action._selectedRelayer]
         const tipTokens = relayer.acceptedTipTokens[this.chainId]
-        const gas = await this.estimateRelayerGas(signedCmd)
+        const { gas, additionalFee } = await this.estimateRelayerGas(signedCmd)
         const client = getPublicClient()
         // const gasPrice = 1000000000000n
         let gasPrice = await client.getGasPrice()
-        if (this.chainId != 1 && gasPrice < parseEther('2', 'gwei')) // low gas on goerli breaks tip estimation
+        if (this.chainId == goerli.id && gasPrice < parseEther('2', 'gwei')) // low gas on goerli breaks tip estimation
           gasPrice = parseEther('2', 'gwei')
 
-        signedCmd._action._gasPrice = `${Math.ceil(parseInt(gasPrice) / 1000000000)} gwei`
-        const gasInWei = gas * gasPrice
-        const gasInETH = formatEther(gasInWei)
         console.log('gasPrice', gasPrice)
+        signedCmd._action._gasPrice = `${Math.ceil(parseInt(gasPrice) / 1000000000)} gwei`
+        let gasInWei = gas * gasPrice + additionalFee
+        console.log('gasInWei', gasInWei)
+        const gasInETH = formatEther(gasInWei)
 
-        console.log('gasInWei', gas * gasPrice)
         if (tipTokens.indexOf(ZERO_ADDRESS) != -1) {
           tipOptions[ZERO_ADDRESS] = { token: ZERO_ADDRESS, text: `${parseFloat(gasInETH).toFixed(6)} ETH`, amount: gasInWei.toString() }
         }
@@ -1041,8 +1048,8 @@ export default {
       }
       return prices
     },
-    // this estimate always seems high
     estimateRelayerGas: async function (cmd) {
+      let additionalFee = 0n
       try {
         const client = getPublicClient()
         let gas = await client.estimateContractGas({
@@ -1053,8 +1060,21 @@ export default {
         })
         if (cmd.tip == '0x')
           gas += RELAYER_GAS_TIP_MARKUP
-        console.log('gas', gas)
-        return gas
+        // L1 fee for scroll
+        if ([scroll.id, scrollSepolia.id].indexOf(this.chainId) != -1) {
+          const calldata = encodeFunctionData({
+            functionName: 'userCmdRelayer', args: [cmd.callpath, cmd.cmd, cmd.conds, cmd.tip, cmd.sig], abi: CROC_ABI,
+          })
+          // this seems to give noticeably lower values than what actually gets credited onchain?
+          // idk, bump it 35%
+          const call = {
+            address: '0x5300000000000000000000000000000000000002', abi: [{ "inputs": [{ "internalType": "bytes", "name": "_data", "type": "bytes" }], "name": "getL1Fee", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }],
+            functionName: "getL1Fee", args: [calldata]
+          }
+          additionalFee = (await client.readContract(call)) * 135n / 100n
+        }
+        console.log('gas', gas, additionalFee)
+        return { gas, additionalFee }
       } catch (e) {
         // console.error('sendRelayerTx error', e)
         throw e
@@ -1068,7 +1088,7 @@ export default {
         verifyingContract: CROC_CHAINS[this.chainId].addrs.dex
       }
 
-      if (this.chainId == 1)
+      if ([1, 42161, 421613, 534351, 534352].indexOf(this.chainId) != -1)
         domain.version = '1.0'
 
       const types = {
@@ -1243,10 +1263,16 @@ export default {
       }
       return fetchedPools
     },
-    fetchTokens: async function () {
+    fetchTokens: async function (chainId) {
+      const chainString = CROC_CHAINS[chainId].geckoChainString
+      console.log(chainId, chainString)
+      if (!chainString || Object.keys(this.COLD_TOKENS[chainId]).size > 0)
+        return
+      console.log('fetching tokens')
+
       let response
       try {
-        response = await fetch('https://tokens.coingecko.com/uniswap/all.json', {
+        response = await fetch(`https://tokens.coingecko.com/${chainString}/all.json`, {
           method: "GET",
           referrerPolicy: "no-referrer",
         });
@@ -1260,7 +1286,7 @@ export default {
           token.logoURI = token.logoURI.replace(/\/thumb\//, '/large/')
         token.symbolLower = token.symbol.toLowerCase()
         token.nameLower = token.name.toLowerCase()
-        this.$set(this.COLD_TOKENS, token.address, token)
+        this.$set(this.COLD_TOKENS[chainId], token.address, token)
       }
     },
     fetchTokenInfo: async function (address, fetchSurplus = false) {
@@ -1269,7 +1295,7 @@ export default {
       address = address.toLowerCase()
       let token = this.TOKENS[this.chainId][address]
       if (!token) {
-        token = this.COLD_TOKENS[address]
+        token = this.COLD_TOKENS[this.chainId][address]
         if (token)
           this.$set(this.TOKENS[this.chainId], address, token)
       }
@@ -1333,10 +1359,9 @@ export default {
         // @TODO: maybe remove for prod
         if (tokens.indexOf(ZERO_ADDRESS) == -1)
           tokens.unshift(ZERO_ADDRESS)
-        if (this.chainId == 1 && tokens.indexOf("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") == -1)
-          tokens.push("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
-        if (this.chainId == 5 && tokens.indexOf("0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c") == -1)
-          tokens.push("0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c")
+        const someToken = getSomeTokenForChain(this.chainId)
+        if (tokens.indexOf(someToken) == -1)
+          tokens.push(someToken)
         // console.log(owner, tokens)
         const surpluses = await this.fetchSurplusAmounts(owner, tokens)
         console.log('surpluses', surpluses)
@@ -1534,16 +1559,19 @@ export default {
         return
       }
       const client = getPublicClient()
-      let [ensName, balance] = await Promise.all([client.getEnsName({ address: this.address }), client.getBalance({ address: this.address })]);
-      const symbol = this.chainId == 1 ? 'ETH' : 'gETH'
-      this.ethBalance = `${getFormattedNumber(parseFloat(formatEther(balance)))} ${symbol}`
-      this.ensName = ensName
+      let [ensName, balance] = await Promise.allSettled([client.getEnsName({ address: this.address }), client.getBalance({ address: this.address })]);
+
+      const symbol = [mainnet.id, arbitrum.id, scroll.id].includes(this.chainId) ? 'ETH' : 'gETH'
+      if (balance.status == 'fulfilled')
+        this.ethBalance = `${getFormattedNumber(parseFloat(formatEther(balance.value)))} ${symbol}`
+      if (ensName.status == 'fulfilled')
+        this.ensName = ensName.value
       if (this.ensName && !this.ensAvatar)
         this.ensAvatar = await client.getEnsAvatar({ name: normalize(this.ensName) })
     },
-    switchToChain: async function(id) {
+    switchToChain: async function (id) {
       const wallet = await getWalletClient({ chainId: this.chainId })
-      await wallet.switchChain({id})
+      await wallet.switchChain({ id })
     },
     removeTip: function (scmd) {
       scmd.tip = '0x'
@@ -1575,9 +1603,8 @@ export default {
       localStorage.termsAccepted = "1"
     },
     txLink: function (hash) {
-      const chains = { 1: "etherscan.io", 5: 'goerli.etherscan.io' }
-      const base = chains[this.chainId]
-      return `https://${base}/tx/${hash}`
+      const explorer = CROC_CHAINS[this.chainId].blockExplorer
+      return `${explorer}tx/${hash}`
     },
     shortHash: function (hash) {
       return hash.slice(0, 6) + "..." + hash.slice(-4);
@@ -1623,7 +1650,7 @@ export default {
         this.lastRefresh = Date.now()
       }, 1000);
     document.addEventListener('visibilitychange', this.onVisibilityChange)
-    this.fetchTokens()
+    this.fetchTokens(mainnet.id)
   },
   unmounted: function () {
     if (this.refreshTicker) {

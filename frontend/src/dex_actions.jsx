@@ -38,7 +38,7 @@ export const COMMANDS = {
     settleFlags: 3,
 
     _fromToken: null,
-    _toToken: "0x0000000000000000000000000000000000000000",
+    _toToken: null,
     _fromQty: null,
     _fromQtyRaw: 0n,
     _toQty: null,
@@ -62,7 +62,7 @@ export const COMMANDS = {
     text: 'Deposit',
     recv: null,
     qty: null, // human string with decimal point
-    token: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    token: null,
     permit: null,
     _qtyRaw: null,
     ...cloneDeep(BASE_COMMAND),

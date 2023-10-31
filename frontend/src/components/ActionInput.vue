@@ -246,7 +246,7 @@ import { parseUnits, formatUnits } from "viem"
 import { fromDisplayPrice, encodeCrocPrice, tickToPrice, priceToTick, toDisplayPrice } from '@crocswap-libs/sdk'
 import { getFormattedNumber } from "../number_formatting.jsx"
 import { COMMANDS } from '../dex_actions.jsx'
-import { isValidAddress, lpBaseTokens, lpQuoteTokens, poolKey } from '../utils.jsx'
+import { isValidAddress, lpBaseTokens, lpQuoteTokens, poolKey, getSomeTokenForChain } from '../utils.jsx'
 import { SETTLE_TO_WALLET, BASE_TO_DEX, QUOTE_TO_DEX, SETTLE_TO_DEX } from "../dex_actions";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
@@ -320,7 +320,7 @@ export default {
       this.$nextTick(() => {
         this.action = { ...action };
         if (this.action._type == 'swap')
-          this.preFillSwapTokens()
+          this.preFillAction()
         else if (this.action._type == 'removeConcLp') {
           this.reparseTick('min')
           this.reparseTick('max')
@@ -641,17 +641,15 @@ export default {
       let color = this.action._gasless ? 'primary' : 'success'
       return this.signing ? `outline-${color}` : color
     },
-    preFillSwapTokens: function () {
-      const chain = this.crocChain.chainId
-      if (chain == 1) {
-        this.action._fromToken = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
-      } else if (chain == 5) {
-        this.action._fromToken = "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c"
-      } else if (chain == 421613) {
-        this.action._fromToken = "0xc944b73fba33a773a4a07340333a3184a70af1ae"
+    preFillAction: function () {
+      const someToken = getSomeTokenForChain(this.crocChain.chainId)
+      if (this.action._type == 'swap') {
+        this.action._fromToken = someToken
+        this.action._toToken = ZERO_ADDRESS
+      } else if (['deposit', 'withdraw', 'transfer'].indexOf(this.action._type) != -1) {
+        this.action.token = someToken
+        this.$emit('fetchWalletBalance', someToken)
       }
-      console.log(this.action._fromToken)
-      this.action._toToken = ZERO_ADDRESS
     }
   },
   computed: {
@@ -661,9 +659,7 @@ export default {
       },
       set: function (actionType) {
         this.action = cloneDeep(COMMANDS[actionType])
-        if (this.action._type == 'swap') {
-          this.preFillSwapTokens()
-        }
+        this.preFillAction()
       }
     },
     actionImpossible: function () {
@@ -733,15 +729,11 @@ export default {
     },
   },
   mounted: function () {
-    if (this.action._type == 'swap') {
-      this.preFillSwapTokens()
-    }
+    this.preFillAction()
   },
   watch: {
     crocChain: function (chain) {
-      if (this.action._type == 'swap') {
-        this.preFillSwapTokens()
-      }
+      this.preFillAction()
     },
   }
 };

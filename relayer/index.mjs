@@ -5,9 +5,9 @@ import fs from 'fs';
 
 import { configureChains, createConfig } from '@wagmi/core'
 // import { mainnet, goerli } from '@wagmi/core/chains'
-import { mainnet, goerli } from 'viem/chains'
+import { mainnet, goerli, arbitrum, arbitrumGoerli, scroll, scrollSepolia } from 'viem/chains'
 import { publicProvider } from '@wagmi/core/providers/public'
-import { createPublicClient, createWalletClient, decodeAbiParameters, numberToHex, http, hexToBigInt, parseGwei } from 'viem';
+import { createPublicClient, createWalletClient, decodeAbiParameters, numberToHex, http, hexToBigInt, parseGwei, encodeFunctionData } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { CROC_CHAINS } from './constants.mjs'
@@ -19,24 +19,32 @@ import { decodeCrocPrice } from './utils.mjs';
 const TRANSPORTS = {
   1: { http: http("https://rpc.flashbots.net/?builder=flashbots&builder=f1b.io&builder=rsync&builder=beaverbuild.org&builder=builder0x69&builder=titan&builder=eigenphi&builder=boba-builder"), tx: http("https://rpc.flashbots.net/?builder=flashbots&builder=f1b.io&builder=rsync&builder=beaverbuild.org&builder=builder0x69&builder=titan&builder=eigenphi&builder=boba-builder"), chain: mainnet },
   5: { http: http(`https://goerli.infura.io/v3/${process.env.INFURA_KEY}`), tx: http(`https://goerli.infura.io/v3/${process.env.INFURA_KEY}`), chain: goerli },
+  42161: { http: http(`https://arbitrum.llamarpc.com`), tx: http(`https://arbitrum.llamarpc.com`), chain: arbitrum },
+  421613: { http: http(`https://rpc.goerli.arbitrum.gateway.fm`), tx: http(`https://rpc.goerli.arbitrum.gateway.fm`), chain: arbitrumGoerli },
+  534351: { http: http(`https://sepolia-rpc.scroll.io`), tx: http(`https://sepolia-rpc.scroll.io`), chain: scrollSepolia },
+  534352: { http: http(`https://1rpc.io/scroll`), tx: http(`https://1rpc.io/scroll`), chain: scroll },
 }
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 const RELAY_SPEC = {
   tipTokens: {
     1: ["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", ZERO_ADDRESS, "0xdac17f958d2ee523a2206206994597c13d831ec7", "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", "0x6b175474e89094c44da98b954eedeac495271d0f"],
-    5: [ZERO_ADDRESS, "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "0xdc31Ee1784292379Fbb2964b3B9C4124D8F89C60", "0xc04b0d3107736c32e19f1c62b2af67be61d63a05"]
+    5: [ZERO_ADDRESS, "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "0xdc31Ee1784292379Fbb2964b3B9C4124D8F89C60", "0xc04b0d3107736c32e19f1c62b2af67be61d63a05"],
+    42161: [ZERO_ADDRESS, "0xaf88d065e77c8cc2239327c5edb3a432268e5831", "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f"],
+    421613: [ZERO_ADDRESS, "0xc944b73fba33a773a4a07340333a3184a70af1ae", "0x5263e9d82352b8098cc811164c38915812bfc1e3", "0xc52f941486978a25fad837bb701d3025679780e4"],
+    534351: [ZERO_ADDRESS, '0x4d65fb724ced0cfc6abfd03231c9cdc2c36a587b'],
+    534352: [ZERO_ADDRESS, "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4"],
   },
   tipRecv: [numberToHex(256, { size: 20 }), '0x09784d03b42581cfc4fc90a7ab11c3125dedeb86', '0xb4fdaf8e6636e7394f6ae768c5fa9d2e5bf6f0dc'],
   tipThreshold: 0.85,  // actual tip must at least cover this amount of gasFee
-  maxFeePerGasIncrease: { 1: 1.25, 5: 5 },  // multiplies current gas by this number, based on chainId
+  maxFeePerGasIncrease: { 1: 1.25, 5: 5, 42161: 1.25, 421613: 5, 534351: 1, 534352: 1 },  // multiplies current gas by this number, based on chainId
 }
 
 const ALREADY_SENT = {}
 const TX_STATUSES = {}
 
 const { chains, publicClient, webSocketPublicClient } = configureChains(
-  [mainnet, goerli],
+  [mainnet, goerli, arbitrum, arbitrumGoerli, scroll, scrollSepolia],
   [publicProvider()],
 )
 
@@ -164,7 +172,22 @@ async function isTipEnough(cmd, gasPrice) {
   const { token, amount } = parseTip(cmd.tip, cmd.chainId)
   const ethTip = await convertTipToETH(token, amount, cmd.chainId)
   const gasNeeded = await estimateRelay(cmd)
-  const gasFee = gasNeeded * gasPrice
+  let gasFee = gasNeeded * gasPrice
+  // l1fee for scroll
+  if ([scroll.id, scrollSepolia.id].indexOf(cmd.chainId) != -1) {
+    const calldata = encodeFunctionData({
+      functionName: 'userCmdRelayer', args: [cmd.callpath, cmd.cmd, cmd.conds, cmd.tip, cmd.sig], abi: CROC_ABI,
+      // account: this.account
+    })
+    const call = {
+      address: '0x5300000000000000000000000000000000000002', abi: [{ "inputs": [{ "internalType": "bytes", "name": "_data", "type": "bytes" }], "name": "getL1Fee", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }],
+      functionName: "getL1Fee", args: [calldata]
+    }
+    const client = CLIENTS[cmd.chainId].client
+    const l1fee = await client.readContract(call)
+    console.log('l1fee', l1fee)
+    gasFee += l1fee * 135n / 100n  // @TODO: figure out why getL1Fee returns lower amounts
+  }
   console.log('gasFee', gasFee, 'ethTip', ethTip)
 
   const ratio = parseInt(ethTip * 10000n / gasFee) / 10000
@@ -180,13 +203,19 @@ async function sendRelayerTx(cmd, maxFeePerGas) {
   const wallet = CLIENTS[cmd.chainId].wallet
   try {
     const maxPriorityFeePerGas = parseGwei('0.35') // # TODO: this sucks
-    const sim = await client.simulateContract({
+    let tx = {
       functionName: 'userCmdRelayer', args: [cmd.callpath, cmd.cmd, cmd.conds, cmd.tip, cmd.sig],
       address: CROC_CHAINS[cmd.chainId].addrs.dex, abi: CROC_ABI,
       // account: wallet.account,
       account: ZERO_ADDRESS,
-      maxFeePerGas, maxPriorityFeePerGas: maxFeePerGas < maxPriorityFeePerGas ? maxFeePerGas : maxPriorityFeePerGas,
-    })
+    }
+    if ([mainnet.id, goerli.id, arbitrum.id, arbitrumGoerli.id].indexOf(cmd.chainId) != -1) {
+      tx.maxFeePerGas = maxFeePerGas
+      tx.maxPriorityFeePerGas = maxFeePerGas < maxPriorityFeePerGas ? maxFeePerGas : maxPriorityFeePerGas
+    } else {
+      tx.gasPrice = maxFeePerGas
+    }
+    const sim = await client.simulateContract(tx)
     console.log('sim', sim)
     sim.request.account = wallet.account
     if (process.env.DRY)

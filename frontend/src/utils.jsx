@@ -73,3 +73,20 @@ export function dump(o) {
 	: value
   );
 }
+
+export function getSomeTokenForChain(chainId) {
+  if (chainId == 1)
+    return "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+  else if (chainId == 5)
+    return "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c"
+  else if (chainId == 42161)
+    return "0xaf88d065e77c8cc2239327c5edb3a432268e5831"
+  else if (chainId == 421613)
+    return "0xc944b73fba33a773a4a07340333a3184a70af1ae"
+  else if (chainId == 534351)
+    return "0x4d65fb724ced0cfc6abfd03231c9cdc2c36a587b"
+  else if (chainId == 534352)
+    return "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4"
+  else
+    throw "chain not supported"
+}

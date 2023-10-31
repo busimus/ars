@@ -1,6 +1,6 @@
 export const GRAPHCACHE_PROVIDERS = [
   // { name: "bus's indexer", url: 'https://ambindexer.bus.bz/gcgo/' }, // it's like >2M RPC requests per day wtf
-  { name: 'Official', url: 'https://ambindexer.net/gcgo/' }
+  { name: 'Official', urls: { 1: 'https://ambindexer.net/gcgo/', 5: 'https://ambindexer.net/gcgo/', 5: 'https://ambindexer.net/gcgo/', 42161: 'https://ambindexer.net/gcgo/', 421613: 'https://ambindexer.net/scroll-gcgo/', 534351: 'https://ambindexer.net/scroll-gcgo/', 534352: 'https://ambindexer.net/scroll-gcgo/' } } // @TODO: arbitrum
 ]
 
 
@@ -11,19 +11,20 @@ export class GraphcacheProvider {
 
   async user_balance_tokens(address, chainId) {
     const req = `user_balance_tokens?user=${address}&chainId=${chainId}`
-    return (await this.sendRequest(req));
+    return (await this.sendRequest(req, chainId));
   }
 
   async user_positions(address, chainId) {
     const req = `user_positions?user=${address}&chainId=${chainId}&omitEmpty=true`
-    return (await this.sendRequest(req));
+    return (await this.sendRequest(req, chainId));
   }
 
-  async sendRequest(req, full = false) {
+  async sendRequest(req, chainId, full = false) {
     let err = null
     for (const i in GRAPHCACHE_PROVIDERS) {
       const provider = GRAPHCACHE_PROVIDERS[this.selected_provider_index]
-      const url = new URL(provider.url + req);
+      const chainUrl = provider.urls[parseInt(chainId)]
+      const url = new URL(chainUrl + req);
 
       const abort = new AbortController()
       const timeout = setTimeout(() => abort.abort(), 5000)
