@@ -48,10 +48,10 @@
           <div v-if="chainError" class="text-danger" style="margin-top: 0.5rem">
             Your network is not supported!
             <br />
-            Switch to Ethereum or Goerli Testnet to proceed.
+            Switch to Ethereum, Scroll, Canto, or testnet to proceed.
             <br />
-            <b-button variant="primary" size="md" @click="switchToChain(1)" style="margin-top: 0.5rem;">Switch to
-              Ethereum</b-button>
+            <b-button variant="primary" size="md" @click="w3modalNetworks" style="margin-top: 0.5rem;">Select
+              network</b-button>
           </div>
           <div v-for="(status, hash) in waitingHashes"
             style="display: flex; align-items: center; justify-content: space-between; padding-top: 1rem; gap: 0.5rem;">
@@ -92,8 +92,9 @@
         <!-- there were too many props ten props ago -->
         <ActionInput class="main-panel border shadow-sm rounded" style="height: auto; width: inherit" ref="actionInput"
           @perform="performAction" @fetchToken="a => fetchTokenInfo(a, true)"
-          @fetchWalletBalance="a => fetchWalletBalance(a)" @approve="sendApproveTx" :fetchSwapOutput="fetchSwapOutput"
-          :pools="pools" :tokens="TOKENS[chainId]" :coldTokens="COLD_TOKENS[chainId]" :balances="balances"
+          @fetchWalletBalance="a => fetchWalletBalance(a)" @approve="sendApproveTx"
+          @fetchPool="pos => fetchMissingPool(pos)" :fetchSwapOutput="fetchSwapOutput" :pools="pools"
+          :tokens="TOKENS[chainId]" :coldTokens="COLD_TOKENS[chainId]" :balances="balances"
           :walletBalances="walletBalances" :allowances="allowances" :address="address" :signing="signing"
           :canSign="canSign" :crocChain="CHAINS[chainId]" />
       </div>
@@ -211,22 +212,36 @@ import {
   BIconQuestionCircle,
 } from "bootstrap-vue";
 
-import { EthereumClient, w3mConnectors, w3mProvider } from '@web3modal/ethereum'
-import { Web3Modal } from '@web3modal/html'
+import { createWeb3Modal, defaultWagmiConfig } from '@web3modal/wagmi'
 import { configureChains, createConfig, getPublicClient, getWalletClient, fetchToken, fetchBalance } from '@wagmi/core'
 import { mainnet, arbitrum, scroll, canto, goerli, arbitrumGoerli, scrollSepolia } from '@wagmi/core/chains'
 
 const chains = [mainnet, scroll, canto, goerli, arbitrumGoerli, scrollSepolia]
 const projectId = '8978c906351c8a4e3eccd85a700306ab'
 
-const { publicClient } = configureChains(chains, [w3mProvider({ projectId })], { batch: { multicall: true, wait: 16 } })
-const wagmiConfig = createConfig({
+const wagmiConfig = defaultWagmiConfig({
   autoConnect: true,
-  connectors: w3mConnectors({ projectId, chains }),
-  publicClient
+  chains,
+  projectId,
+  metadata: {
+    name: 'Ambient Relay Serivce',
+    description: 'Alternative frontend for Ambient Finance',
+    url: 'https://ars.bus.bz',
+    icons: ['https://raw.githubusercontent.com/busimus/ars/main/frontend/src/assets/icon-512x512.png']
+  }
 })
-const ethereumClient = new EthereumClient(wagmiConfig, chains)
-const web3modal = new Web3Modal({ projectId, themeMode: 'dark' }, ethereumClient)
+
+const web3modal = createWeb3Modal({
+  wagmiConfig, projectId, chains, themeMode: 'dark',
+  chainImages: {
+    5: 'https://s2.coinmarketcap.com/static/img/coins/200x200/23669.png',
+    7700: 'https://icons.llamao.fi/icons/chains/rsz_canto.jpg',
+    42161: 'https://icons.llamao.fi/icons/chains/rsz_arbitrum.jpg',
+    421613: 'https://icons.llamao.fi/icons/chains/rsz_arbitrum.jpg',
+    534351: 'https://icons.llamao.fi/icons/chains/rsz_scroll',
+    534352: 'https://icons.llamao.fi/icons/chains/rsz_scroll',
+  }
+})
 
 import { ethers, BigNumber } from "ethers";
 import { roundForConcLiq } from '@crocswap-libs/sdk'
@@ -333,7 +348,7 @@ export default {
       RELAYERS,
       TOKENS,
       CHAINS: CROC_CHAINS,
-      COLD_TOKENS: { 1: {}, 5: {}, 7700: {}, 42161: {}, 421613: {},  534351: {}, 534352: {} },
+      COLD_TOKENS: { 1: {}, 5: {}, 7700: {}, 42161: {}, 421613: {}, 534351: {}, 534352: {} },
 
       ethBalance: '',
       ensName: null,
@@ -342,7 +357,10 @@ export default {
   },
   methods: {
     w3modal: async function () {
-      await web3modal.openModal()
+      await web3modal.open()
+    },
+    w3modalNetworks: async function () {
+      await web3modal.open({ view: 'Networks' })
     },
     accountChanged: function (account) {
       console.log('accountChanged', account)
@@ -1268,6 +1286,13 @@ export default {
         this.$set(this.pools, poolId, pool)
       }
       return fetchedPools
+    },
+    fetchMissingPool: async function (pos) {
+      pos.user = this.address
+      await this.fetchPools({ p: pos })
+      await this.fetchPositionsLiq({ p: pos })
+      pos._baseDecimals = (await this.fetchTokenInfo(pos.base)).decimals
+      pos._quoteDecimals = (await this.fetchTokenInfo(pos.quote)).decimals
     },
     fetchTokens: async function (chainId) {
       const chainString = CROC_CHAINS[chainId].geckoChainString

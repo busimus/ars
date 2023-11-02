@@ -299,7 +299,7 @@ export default {
       NO_PERMIT_SUPPORT,
     };
   },
-  emits: ['perform', 'fetchToken', 'fetchWalletBalance', 'approve'],
+  emits: ['perform', 'fetchToken', 'fetchWalletBalance', 'fetchPool', 'approve'],
   props: {
     pools: Object,
     tokens: Object,
@@ -368,6 +368,7 @@ export default {
       const reprice = toDisplayPrice(tickToPrice(tick), baseDec, quoteDec, true)
       console.log(price, tick, reprice)
       this.action[side == 'min' ? '_rangeMin' : '_rangeMax'] = reprice
+      this.$emit('fetchPool', this.action)
     },
     setRecvToSelf: function () {
       this.action.recv = this.address
@@ -700,11 +701,15 @@ export default {
     },
     poolValid: function () {
       if (this.poolFilled) {
+        if (!this.action.poolIdx)
+          this.action.poolIdx = this.crocChain.poolIndex
         const pool = this.pools[poolKey(this.action)]
         if (pool)
           return true
-        else
+        else {
+          this.$emit('fetchPool', this.action)
           return false
+        }
       } else {
         return false
       }

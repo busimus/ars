@@ -2,7 +2,7 @@
 
 This is an alternative frontend for [Ambient Finance](https://ambient.finance) that has a gasless transaction relayer. It allows users to execute Ambient DEX commands without needing gas on their address if they have enough tokens on their DEX balance to cover the gas.
 
-The project is deployed at [https://ars.bus.bz](https://ars.bus.bz) and works with Ethereum mainnet and Goerli testnet.
+The project is deployed at [https://ars.bus.bz](https://ars.bus.bz) and works with Ambient/CrocSwap contracts on Ethereum, Scroll, Canto, Goerli, Arbitrum Goerli, and Scroll Sepolia.
 
 ## Features
 * Supports balance withdrawal/transfer, LP removal, swaps, deposits (EIP-2612)
@@ -25,9 +25,8 @@ The project is deployed at [https://ars.bus.bz](https://ars.bus.bz) and works wi
 5. Build and deploy `frontend`: `npm install && npm run build`
 
 ## TODO
-* Limit orders
+* Limit orders, collapsible exchange panel
 * LP management/creation
-* Ensure commands can be created and executed even if indexers are offline
 * Self hosted indexer and graph node
 
 ## Attributions
