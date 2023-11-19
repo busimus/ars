@@ -189,10 +189,53 @@
           Pool not found
         </div>
       </div>
+      <div v-else-if="actionType == 'parse'">
+        <div class="text-center p-1">You can use this to load missing positions</div>
+        <a href="#collapseIndicatorChevronDark" v-b-toggle.collapse-howto @click.prevent class="text-center"
+          style="display: block;  margin-bottom: 0.5rem;" data-bs-toggle="collapse" aria-expanded="false"
+          aria-controls="collapseIndicatorChevronDark">
+          How to
+          <b-icon-chevron-down class="when-closed" />
+          <b-icon-chevron-up class="when-open" />
+        </a>
+        <b-collapse id="collapse-howto" style="text-align: justify;">
+          <ol style="list-style: decimal inside;">
+            <li>Open the <a :href="explorerLink">block explorer page</a> for all transactions from the currently connected
+              address to Ambient's contract</li>
+            <li>Find a <code>User Cmd</code> transaction</li>
+            <li>Paste the hash of that transaction, wait for it to load</li>
+            <li>Repeat until you find the deposit transactions for all missing positions</li>
+          </ol>
+          Make sure you're connected to the correct chain.<br />
+          Positions without liquidity won't be loaded.
+          <hr />
+        </b-collapse>
+        <b-form-group id="input-group-parse-txInput" label="Transaction" label-for="input-parse-txInput" style="flex: 1;"
+          required>
+          <b-form-input id="input-parse-txInput" v-model="action.txInput" @input="$emit('parseTx', action.txInput)"
+            placeholder="TX hash or calldata" required></b-form-input>
+        </b-form-group>
+
+        <div class="border rounded text-center p-2"
+          v-if="parsedTxs[action.txInput] != null && parsedTxs[action.txInput].success"
+          style="display: flex; flex-direction:column; gap: 0.25rem; margin-top: 1rem">
+          {{ parsedTxs[action.txInput].description }}
+        </div>
+        <div v-else-if="parsedTxs[action.txInput] != null && !parsedTxs[action.txInput].success"
+          class="border rounded text-center p-2 text-danger" style="margin-top: 1rem">
+          {{ parsedTxs[action.txInput].description }}
+        </div>
+        <div v-else-if="action.txInput && action.txInput.match(/0x[0-9a-f]+/) && !parsedTxs[action.txInput]"
+          class="border rounded text-center p-2" style="margin-top: 1rem">
+          <div class="load-spinner spinner-border spinner-border-md" role="status">
+            <span class="sr-only">Parsing</span>
+          </div>
+        </div>
+      </div>
       <div v-else class="text-center">
         Most commands can be automatically filled in using buttons in the exchange pane
       </div>
-      <div v-if="actionType" style="display: flex; justify-content: center; margin-top: 0.7rem">
+      <div v-if="actionType && actionType != 'parse'" style="display: flex; justify-content: center; margin-top: 0.7rem">
         <b-form-checkbox id="checkbox-gasless" v-if="actionType" v-model="action._gasless" name="checkbox-gasless" switch
           size="lg">
           Gasless
@@ -202,7 +245,7 @@
           You'll need to tip the relayer from your DEX balance
         </b-tooltip>
       </div>
-      <b-button type="submit" v-if="actionType" :variant="sendButtonVariant()" size="lg"
+      <b-button type="submit" v-if="actionType && actionType != 'parse'" :variant="sendButtonVariant()" size="lg"
         style="width: 100%; margin-top: 0.5rem" :disabled="!canSign || signing || actionImpossible == true">
         <div v-if="signing" class="load-spinner spinner-border spinner-border-md" role="status">
           <span class="sr-only">{{ signButtonText }}</span>
@@ -228,6 +271,8 @@ import {
   BFormInvalidFeedback,
   BIconArrowClockwise,
   BIconArrowDownShort,
+  BIconChevronDown,
+  BIconChevronUp,
   BIconQuestionCircle,
   BIconArrowDownUp,
   BIconArrowBarUp,
@@ -251,7 +296,7 @@ import { SETTLE_TO_WALLET, BASE_TO_DEX, QUOTE_TO_DEX, SETTLE_TO_DEX } from "../d
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
-const GASLESS_DEPOSIT_INFO = `Tokens with confirmed support for gasless deposits:
+const GASLESS_DEPOSIT_INFO = `Tokens with confirmed support for gasless deposits on Ethereum:
 USDC, UNI, stETH, wstETH, LUSD, R, RSR, ARB, 1INCH.
 
 If the token you're interested in isn't listed then try it anyway – if you can create a signed deposit command without errors then it's supported.`
@@ -277,6 +322,8 @@ export default {
     BIconArrowClockwise,
     BIconArrowDownUp,
     BIconArrowDownShort,
+    BIconChevronDown,
+    BIconChevronUp,
     BIconQuestionCircle,
     BIconArrowBarUp,
     BIconWallet2,
@@ -299,7 +346,7 @@ export default {
       NO_PERMIT_SUPPORT,
     };
   },
-  emits: ['perform', 'fetchToken', 'fetchWalletBalance', 'fetchPool', 'approve'],
+  emits: ['perform', 'fetchToken', 'fetchWalletBalance', 'fetchPool', 'approve', 'parseTx'],
   props: {
     pools: Object,
     tokens: Object,
@@ -307,6 +354,7 @@ export default {
     balances: Object,
     walletBalances: Object,
     allowances: Object,
+    parsedTxs: Object,
     address: String,
     crocChain: Object,
     signing: Boolean,
@@ -732,6 +780,9 @@ export default {
         }
       return 0
     },
+    explorerLink: function () {
+      return `${this.crocChain.blockExplorer}txs?address=${this.address}&toaddress=${this.crocChain.addrs.dex}`
+    }
   },
   mounted: function () {
     this.preFillAction()
@@ -754,5 +805,3 @@ export default {
   padding: 0.5rem 1rem !important;
 }
 </style>
-
-

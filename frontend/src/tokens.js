@@ -25,7 +25,7 @@ export const TOKENS = {
             "nameLower": "tether",
             "symbolLower": "usdt",
             "decimals": 6,
-            "logoURI": "https://assets.coingecko.com/coins/images/325/large/Tether.png?1668148663"
+            "logoURI": "https://assets.coingecko.com/coins/images/325/large/Tether.png"
         },
         "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": {
             "name": "Wrapped BTC",
@@ -128,7 +128,7 @@ export const TOKENS = {
             "nameLower": "tether",
             "symbolLower": "usdt",
             "decimals": 6,
-            "logoURI": "https://assets.coingecko.com/coins/images/325/large/Tether.png?1668148663"
+            "logoURI": "https://assets.coingecko.com/coins/images/325/large/Tether.png"
         },
         "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f": {
             "name": "Wrapped BTC",
@@ -218,10 +218,10 @@ export const TOKENS = {
             "logoURI": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/logo.png"
         },
         "0x4d65fb724ced0cfc6abfd03231c9cdc2c36a587b": {
-            "name": "USDCoin",
+            "name": "Bridged USDCoin (Scroll)",
             "address": "0x4d65fb724ced0cfc6abfd03231c9cdc2c36a587b",
             "symbol": "USDC",
-            "nameLower": "usdcoin",
+            "nameLower": "bridged usdcoin (scroll)",
             "symbolLower": "usdc",
             "decimals": 6,
             "logoURI": "https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png"
@@ -238,13 +238,31 @@ export const TOKENS = {
             "logoURI": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/logo.png"
         },
         "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4": {
-            "name": "USDCoin",
+            "name": "Bridged USDCoin (Scroll)",
             "address": "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4",
             "symbol": "USDC",
-            "nameLower": "usdcoin",
+            "nameLower": "bridged usdcoin (scroll)",
             "symbolLower": "usdc",
             "decimals": 6,
             "logoURI": "https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png"
+        },
+        "0xf55bec9cafdbe8730f096aa55dad6d22d44099df": {
+            "name": "Bridged Tether (Scroll)",
+            "address": "0xf55bec9cafdbe8730f096aa55dad6d22d44099df",
+            "symbol": "USDT",
+            "nameLower": "bridged tether (scroll)",
+            "symbolLower": "usdt",
+            "decimals": 6,
+            "logoURI": "https://assets.coingecko.com/coins/images/325/large/Tether.png"
+        },
+        "0x3c1bca5a656e69edcd0d4e36bebb3fcdaca60cf1": {
+            "name": "Bridged Wrapped BTC (Scroll)",
+            "symbol": "WBTC",
+            "address": "0x3c1bca5a656e69edcd0d4e36bebb3fcdaca60cf1",
+            "symbolLower": "wbtc",
+            "nameLower": "bridged wrapped btc (scroll)",
+            "decimals": 8,
+            "logoURI": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599/logo.png"
         },
     },
 }

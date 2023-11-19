@@ -93,10 +93,10 @@
         <ActionInput class="main-panel border shadow-sm rounded" style="height: auto; width: inherit" ref="actionInput"
           @perform="performAction" @fetchToken="a => fetchTokenInfo(a, true)"
           @fetchWalletBalance="a => fetchWalletBalance(a)" @approve="sendApproveTx"
-          @fetchPool="pos => fetchMissingPool(pos)" :fetchSwapOutput="fetchSwapOutput" :pools="pools"
+          @fetchPool="pos => fetchMissingPool(pos)" @parseTx="parseTx" :fetchSwapOutput="fetchSwapOutput" :pools="pools"
           :tokens="TOKENS[chainId]" :coldTokens="COLD_TOKENS[chainId]" :balances="balances"
-          :walletBalances="walletBalances" :allowances="allowances" :address="address" :signing="signing"
-          :canSign="canSign" :crocChain="CHAINS[chainId]" />
+          :walletBalances="walletBalances" :allowances="allowances" :parsedTxs="parsedTxs" :address="address"
+          :signing="signing" :canSign="canSign" :crocChain="CHAINS[chainId]" />
       </div>
       <!-- this should obviously be its own component but i'm too tired of dealing with Vue at this point -->
       <div ref="signedCmdsPanel" v-if="Object.keys(signed.options).length > 0" id="signed-cmds-panel"
@@ -244,12 +244,12 @@ const web3modal = createWeb3Modal({
 })
 
 import { ethers, BigNumber } from "ethers";
-import { roundForConcLiq } from '@crocswap-libs/sdk'
+import { ambientPosSlot, concPosSlot, roundForConcLiq } from '@crocswap-libs/sdk'
 import cloneDeep from 'lodash.clonedeep'
 import * as Sentry from "@sentry/browser";
 
 import { watchAccount, watchNetwork, signTypedData } from '@wagmi/core'
-import { encodeAbiParameters, toHex, numberToHex, hexToBigInt, formatUnits, formatEther, UserRejectedRequestError, parseUnits, parseEther, encodeFunctionData } from 'viem'
+import { encodeAbiParameters, toHex, numberToHex, hexToBigInt, formatUnits, formatEther, UserRejectedRequestError, parseUnits, parseEther, encodeFunctionData, decodeFunctionData, decodeAbiParameters } from 'viem'
 import { normalize } from 'viem/ens'
 import { signERC2612Permit } from './permit.jsx'
 
@@ -334,6 +334,7 @@ export default {
         selected: null,
         options: []
       },
+      parsedTxs: {},
       accountWatch: null,
       networkWatch: null,
       signing: false,
@@ -371,7 +372,7 @@ export default {
       console.log('networkChanged', network)
       this.chain = network
       if (network.chain) {
-        this.resetData(true) // before chainId because some components depend on it
+        this.resetData(true, true) // before chainId because some components depend on it
         if (chains.map((c) => c.id).includes(network.chain.id)) {
           this.chainError = false
           this.chainId = network.chain.id
@@ -382,7 +383,7 @@ export default {
         this.refreshData()
       } else {
         this.chainError = false
-        this.resetData(true)
+        this.resetData(true, true)
         this.chainid = 1
       }
     },
@@ -1167,50 +1168,61 @@ export default {
       this.lastRefresh = Date.now()
       this.refreshing -= 1
     },
-    resetData: function (full = false) {
+    resetData: function (pools = false, positions = false) {
       if (this.$refs.actionInput) // ????
         this.$refs.actionInput.resetAction()
       this.balances = {}
       this.walletBalances = {}
       this.allowances = {}
-      this.positions = {}
+      this.parsedTxs = {}
       this.ensName = null
       this.ensAvatar = null
       this.ethBalance = null
-      if (full) {
+      if (pools)
         this.pools = {}
-      }
+      if (positions)
+        this.positions = {}
     },
     fetchPositions: async function (owner) {
-      const positions = {}
+      const positions = cloneDeep(this.positions)
       try {
         const resp = await this.graphcache.user_positions(owner, numberToHex(this.chainId))
         console.log('positions resp', resp)
         for (const pos of resp) {
-          if (pos.ambientLiq == 0 && pos.concLiq == 0 && pos.rewardLiq == 0) {
-            continue
-          }
+          // Indexer might return zeroes as liq values, they should be fetched from the contract anyway
+          // if (pos.ambientLiq == 0 && pos.concLiq == 0 && pos.rewardLiq == 0) {
+          //   continue
+          // }
           try {
             const base = await this.fetchTokenInfo(pos.base)
             const quote = await this.fetchTokenInfo(pos.quote)
             pos._baseDecimals = base.decimals
             pos._quoteDecimals = quote.decimals
-            pos.baseSymbol = base.symbol
-            pos.quoteSymbol = quote.symbol
           } catch (e) {
             pos._baseDecimals = 18
             pos._quoteDecimals = 18
-            pos.baseSymbol = "???"
-            pos.quoteSymbol = "???"
           }
-          positions[pos.positionId] = pos
+          if (pos.positionType == 'concentrated')
+            pos.slot = concPosSlot(this.address, pos.base, pos.quote, pos.bidTick, pos.askTick, pos.poolIdx).toString()
+          else
+            pos.slot = ambientPosSlot(this.address, pos.base, pos.quote, pos.poolIdx).toString()
+          positions[pos.slot] = pos
         }
-        await Promise.all([this.fetchPositionsLiq(positions), this.fetchPools(positions)])
       } catch (e) {
         console.error('fetchPositions error', e)
       }
-      this.positions = positions
-      console.log('positions', dump(positions))
+      try {
+        await Promise.all([this.fetchPositionsLiq(positions), this.fetchPools(positions)])
+      } catch (e) {
+        console.error('fetchPositions liq error', e)
+      }
+      for (const [slot, pos] of Object.entries(positions)) {
+        if (pos.qty)
+          this.$set(this.positions, slot, pos)
+        else
+          this.$delete(this.positions, slot)
+      }
+      console.log('positions', dump(this.positions))
     },
     // fetches and updates pos.qty from the chain
     fetchPositionsLiq: async function (positions) {
@@ -1229,7 +1241,8 @@ export default {
           return { functionName: "queryAmbientTokens", args: [pos.user, pos.base, pos.quote, pos.poolIdx], ...qContract }
       })
       const reads = await client.multicall({ contracts: calls })
-      console.log('fetchPositionsLiq', reads)
+      console.log('fetchPositionsLiq query', positions)
+      console.log('fetchPositionsLiq result', reads)
       for (const i in posIds) {
         const posId = posIds[i]
         const read = reads[i]
@@ -1293,6 +1306,13 @@ export default {
       await this.fetchPositionsLiq({ p: pos })
       pos._baseDecimals = (await this.fetchTokenInfo(pos.base)).decimals
       pos._quoteDecimals = (await this.fetchTokenInfo(pos.quote)).decimals
+      if (pos.qty) {
+        if (pos.positionType == 'concentrated')
+          pos.slot = concPosSlot(this.address, pos.base, pos.quote, pos.bidTick, pos.askTick, pos.poolIdx).toString()
+        else
+          pos.slot = ambientPosSlot(this.address, pos.base, pos.quote, pos.poolIdx).toString()
+        this.$set(this.positions, pos.slot, pos)
+      }
     },
     fetchTokens: async function (chainId) {
       const chainString = CROC_CHAINS[chainId].geckoChainString
@@ -1497,6 +1517,133 @@ export default {
       }
       return swap
     },
+    parseTx: async function (txInput) {
+      txInput = txInput.toLowerCase().match(/0x[0-9a-f]+/)
+      if (!txInput)
+        return
+      txInput = txInput[0]
+      console.log('parseTx', txInput)
+      const result = { success: false, description: "Couldn't parse this transaction" }
+      let calldata = txInput
+      let sender = this.address
+      if (txInput.length == 66) {
+        const client = getPublicClient()
+        try {
+          const tx = await client.getTransaction({ hash: txInput })
+          calldata = tx.input
+          sender = tx.from
+        } catch (e) {
+          console.log(e)
+          result.description = "Couldn't fetch this transaction. Do you have the correct network selected?"
+          this.$set(this.parsedTxs, txInput, result)
+          return
+        }
+      }
+
+      try {
+        const { functionName, args } = decodeFunctionData({ data: calldata, abi: CROC_ABI })
+        if (functionName == 'swap') {
+          result.description = await this.describeSwap(args)
+        } else if (functionName == 'userCmd' || functionName == 'userCmdRelayer') {
+          const { description, position } = await this.describeUserCmd(args[0], args[1], sender)
+          result.description = description
+          try {
+            await this.fetchMissingPool(position)
+          } catch (e) {
+            console.log('fetch parsed position failed', e)
+          }
+        } else {
+          throw "unsupported"
+        }
+        result.success = true
+      } catch (e) {
+        console.log(e)
+      }
+      this.$set(this.parsedTxs, txInput, result)
+    },
+    describeSwap: async function (args) {
+      let description = 'Swap'
+      // try {
+      const base = await this.fetchTokenInfo(args[0])
+      const quote = await this.fetchTokenInfo(args[1])
+      const reformatted = formatUnits(args[5], args[4] ? base.decimals : quote.decimals)
+      const qty = getFormattedNumber(parseFloat(reformatted))
+
+      if (args[3] == true && args[4] == true) {
+        description = `${description} ${qty} ${base.symbol} for ${quote.symbol}`
+      } else if (args[3] == true && args[4] == false) {
+        description = `${description} ${base.symbol} for ${qty} ${quote.symbol}`
+      } else if (args[3] == false && args[4] == false) {
+        description = `${description} ${qty} ${quote.symbol} for ${base.symbol}`
+      } else if (args[3] == false && args[4] == true) {
+        description = `${description} ${quote.symbol} for ${qty} ${base.symbol}`
+      }
+      // } catch (e) {
+
+      // }
+      return description
+    },
+    describeUserCmd: async function (callpath, cmd, sender) {
+      let description = ""
+      let position = { base: null, quote: null, bidTick: null, askTick: null, poolIdx: null, user: sender }
+      if (callpath == CROC_CHAINS[this.chainId].proxyPaths.liq) {
+        const args = decodeAbiParameters([
+          { name: 'code', type: 'uint8' },
+          { name: 'base', type: 'address' },
+          { name: 'quote', type: 'address' },
+          { name: 'poolIdx', type: 'uint256' },
+          { name: 'bidTick', type: 'int24' },
+          { name: 'askTick', type: 'int24' },
+          { name: 'qty', type: 'uint128' },
+          { name: 'limitLower', type: 'uint128' },
+          { name: 'limitHigher', type: 'uint128' },
+          { name: 'settleFlags', type: 'uint8' },
+          { name: 'lpConduit', type: 'address' }
+        ], cmd)
+        console.log(args)
+
+        let action
+        let positionType
+        if ([1, 11, 12].indexOf(args[0]) != -1) {
+          action = 'Mint concentrated LP'
+          positionType = 'concentrated'
+        } else if ([2, 21, 22].indexOf(args[0]) != -1) {
+          action = 'Burn concentrated LP'
+          positionType = 'concentrated'
+        } else if ([3, 31, 32].indexOf(args[0]) != -1) {
+          action = 'Mint ambient LP'
+          positionType = 'ambient'
+        } else if ([4, 41, 42].indexOf(args[0]) != -1) {
+          action = 'Burn ambient LP'
+          positionType = 'ambient'
+        } else if (args[0] == 5) {
+          action = 'Harvest rewards'
+          positionType = 'concentrated'
+        } else {
+          throw "unsupported lp action"
+        }
+
+        position.base = args[1].toLowerCase()
+        position.quote = args[2].toLowerCase()
+        position.poolIdx = args[3]
+        position.bidTick = args[4]
+        position.askTick = args[5]
+        position.positionType = positionType
+
+        description = `${action}`
+        try {
+          const base = await this.fetchTokenInfo(position.base)
+          const quote = await this.fetchTokenInfo(position.quote)
+          description = `${description} in ${base.symbol}/${quote.symbol} pool`
+        } catch (e) {
+          console.log(e)
+        }
+        console.log(description, position)
+      } else {
+        throw 'bad callpath'
+      }
+      return { description, position }
+    },
     relayButtonDisabled: function (scmd) {
       let disabled = false
       if (this.relaying || (this.estimating && !scmd._action._relayManually))
@@ -1659,10 +1806,10 @@ export default {
     address: function (address) {
       console.log('got address', address)
       if (address) {
-        this.resetData(false)
+        this.resetData(false, true)
         this.refreshData(address)
       } else {
-        this.resetData(false)
+        this.resetData(false, true)
       }
     },
   },

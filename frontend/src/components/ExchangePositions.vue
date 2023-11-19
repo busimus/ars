@@ -20,7 +20,8 @@
       <b-skeleton-table :animation="address ? undefined : null" :rows="3" :columns="4" hide-header
         :table-props="{ bordered: false, striped: true }"></b-skeleton-table>
     </div>
-    <div v-else-if="(refreshing == 0 || skeletoned) && Object.keys(balances).length == 0" class="text-center">No balances
+    <div v-else-if="(refreshing == 0 || skeletoned) && Object.values(balances).filter((b) => b.raw > 0n).length == 0"
+      class="text-center">No balances
       found</div>
     <table id="tokenTable" v-else>
       <thead>
@@ -65,12 +66,15 @@
         </tr>
       </thead>
       <tr v-for="(pos, posId) in positions">
-        <td>{{ pos.baseSymbol }}<br /> {{ pos.quoteSymbol }}</td>
+        <td>{{ (tokens[pos.base] || { symbol: '???' }).symbol }}<br /> {{ (tokens[pos.quote] || { symbol: '???' }).symbol }}
+        </td>
         <td>{{ baseLpHumanAmount(pos) }}<br /> {{ quoteLpHumanAmount(pos) }}</td>
 
-        <td v-if="pos.positionType == 'concentrated' && isInRange(pos) == true" style="vertical-align: middle; color: #15be6f"><b-icon-circle-fill class="range-circle"/></td>
-        <td v-else-if="pos.positionType == 'concentrated' && isInRange(pos) == false" style="vertical-align: middle; color: #f6385b"><b-icon-circle-fill class="range-circle"/></td>
-        <td v-else style="vertical-align: middle; color: #7371fc"><b-icon-circle-fill class="range-circle"/></td>
+        <td v-if="pos.positionType == 'concentrated' && isInRange(pos) == true"
+          style="vertical-align: middle; color: #15be6f"><b-icon-circle-fill class="range-circle" /></td>
+        <td v-else-if="pos.positionType == 'concentrated' && isInRange(pos) == false"
+          style="vertical-align: middle; color: #f6385b"><b-icon-circle-fill class="range-circle" /></td>
+        <td v-else style="vertical-align: middle; color: #7371fc"><b-icon-circle-fill class="range-circle" /></td>
 
         <td v-if="pos.positionType == 'concentrated'">{{ rangePrice(pos, 'min') }}<br /> {{ rangePrice(pos, 'max') }}</td>
         <td v-else style="vertical-align: middle; color: #7371fc">ambient</td>

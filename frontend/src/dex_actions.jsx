@@ -120,6 +120,11 @@ export const COMMANDS = {
     _quoteDecimals: null,
     ...cloneDeep(BASE_COMMAND),
   },
+  parse: {
+    _type: 'parse',
+    text: 'Parse transaction',
+    txInput: null,
+  },
 }
 
 export const SETTLE_TO_WALLET = 0
