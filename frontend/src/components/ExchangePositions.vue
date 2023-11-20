@@ -66,7 +66,8 @@
         </tr>
       </thead>
       <tr v-for="(pos, posId) in positions">
-        <td>{{ (tokens[pos.base] || { symbol: '???' }).symbol }}<br /> {{ (tokens[pos.quote] || { symbol: '???' }).symbol }}
+        <td>{{ (tokens[pos.base] || { symbol: '???' }).symbol }}<br /> {{ (tokens[pos.quote] || { symbol: '???' }).symbol
+        }}
         </td>
         <td>{{ baseLpHumanAmount(pos) }}<br /> {{ quoteLpHumanAmount(pos) }}</td>
 

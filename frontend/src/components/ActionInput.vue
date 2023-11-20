@@ -12,8 +12,12 @@
           <b-form-group id="input-group-from-qty" label-for="input-from-qty" class="mb-0" style="width: 100%">
             <b-form-input id="input-from-qty" v-model="action._fromQty" placeholder="0.0"
               @input="swapInputHandler(action._fromQty, 0)" required></b-form-input>
-            <small class="form-text text-muted">DEX balance: {{ dexBalanceHuman(action._fromToken) }} <a href="#"
+            <small class="form-text text-muted"><a style="text-decoration-line: underline; text-decoration-style: dashed;"
+                id="swapSource" title="">DEX balance:</a> {{ dexBalanceHuman(action._fromToken) }} <a href="#"
                 @click.prevent="setSwapToMax('from')">Max</a></small>
+            <b-tooltip target="swapSource" triggers="hover" placement="bottom">
+              Swaps from wallet balance aren't supported for now
+            </b-tooltip>
           </b-form-group>
           <CoinSelector :address="action._fromToken" @update:address="a => { setSwapToken('from', a) }" :tokens="tokens"
             :cold_tokens="coldTokens" :balances="balances" @fetchToken="t => $emit('fetchToken', t)" />
@@ -151,12 +155,12 @@
         <div v-if="actionType == 'removeConcLp'" style="display: flex; gap: 0.4rem">
           <b-form-group id="input-group-removeLp-bidTick" label="Range min" label-for="input-removeLp-bidTick"
             style="flex: 1;" required>
-            <b-form-input id="input-removeLp-bidTick" v-model="action._rangeMin" @change="reparseTick('min')"
+            <b-form-input id="input-removeLp-bidTick" v-model="action._rangeMin" @change="reparseTick('min', true)"
               placeholder="0.0" required></b-form-input>
           </b-form-group>
           <b-form-group id="input-group-removeLp-askTick" label="Range max" label-for="input-removeLp-askTick"
             style="flex: 1;" required>
-            <b-form-input id="input-removeLp-askTick" v-model="action._rangeMax" @change="reparseTick('max')"
+            <b-form-input id="input-removeLp-askTick" v-model="action._rangeMax" @change="reparseTick('max', true)"
               placeholder="0.0" required></b-form-input>
           </b-form-group>
         </div>
@@ -202,12 +206,11 @@
           <ol style="list-style: decimal inside;">
             <li>Open the <a :href="explorerLink">block explorer page</a> for all transactions from the currently connected
               address to Ambient's contract</li>
-            <li>Find a <code>User Cmd</code> transaction</li>
+            <li>Pick a <code>User Cmd</code> transaction you want to load</li>
             <li>Paste the hash of that transaction, wait for it to load</li>
-            <li>Repeat until you find the deposit transactions for all missing positions</li>
+            <li>Repeat until you find deposit transactions for all missing positions</li>
           </ol>
-          Make sure you're connected to the correct chain.<br />
-          Positions without liquidity won't be loaded.
+          If that transaction refers to a position that still has liquidity, that position will show up in the list.
           <hr />
         </b-collapse>
         <b-form-group id="input-group-parse-txInput" label="Transaction" label-for="input-parse-txInput" style="flex: 1;"
@@ -220,6 +223,15 @@
           v-if="parsedTxs[action.txInput] != null && parsedTxs[action.txInput].success"
           style="display: flex; flex-direction:column; gap: 0.25rem; margin-top: 1rem">
           {{ parsedTxs[action.txInput].description }}
+          <div v-if="parsedTxs[action.txInput].position && parsedTxs[action.txInput].position._range">Range: {{
+            parsedTxs[action.txInput].position._range }}
+          </div>
+          <div class="text-success"
+            v-if="parsedTxs[action.txInput].position && parsedTxs[action.txInput].position.qty > 0">Position has liquidity
+          </div>
+          <div class="text-danger"
+            v-else-if="parsedTxs[action.txInput].position && parsedTxs[action.txInput].position.qty == 0">Position has no
+            liquidity</div>
         </div>
         <div v-else-if="parsedTxs[action.txInput] != null && !parsedTxs[action.txInput].success"
           class="border rounded text-center p-2 text-danger" style="margin-top: 1rem">
@@ -236,7 +248,7 @@
         Most commands can be automatically filled in using buttons in the exchange pane
       </div>
       <div v-if="actionType && actionType != 'parse'" style="display: flex; justify-content: center; margin-top: 0.7rem">
-        <b-form-checkbox id="checkbox-gasless" v-if="actionType" v-model="action._gasless" name="checkbox-gasless" switch
+        <b-form-checkbox id="checkbox-gasless" v-model="action._gasless" @change="gaslessChanged" name="checkbox-gasless" switch
           size="lg">
           Gasless
         </b-form-checkbox>
@@ -397,7 +409,7 @@ export default {
       }
     },
     // converts action._rangeMin to action.bidTick or whatever depending on side
-    reparseTick: function (side) {
+    reparseTick: function (side, emitFetch = false) {
       const pool = this.pools[poolKey(this.action)]
       if (!pool)
         return
@@ -416,7 +428,8 @@ export default {
       const reprice = toDisplayPrice(tickToPrice(tick), baseDec, quoteDec, true)
       console.log(price, tick, reprice)
       this.action[side == 'min' ? '_rangeMin' : '_rangeMax'] = reprice
-      this.$emit('fetchPool', this.action)
+      if (emitFetch)
+        this.$emit('fetchPool', this.action)
     },
     setRecvToSelf: function () {
       this.action.recv = this.address
@@ -512,6 +525,12 @@ export default {
       [this.action._fromQty, this.action._toQty] = [this.action._toQty, this.action._fromQty];
       [this.action._fromToken, this.action._toToken] = [this.action._toToken, this.action._fromToken];
       this.swapInputHandler(this.action._fromQty, 0)
+    },
+    gaslessChanged: function(gaslessEnabled) {
+      // since LP removal to surplus balance only makes sense in gasless cases,
+      // it'll be a better UX to disable disable surplus when gasless is disabled
+      this.action._baseSurplus = gaslessEnabled
+      this.action._quoteSurplus = gaslessEnabled
     },
     refreshSwap: async function () {
       if (this.actionType == 'swap')
@@ -763,7 +782,7 @@ export default {
       }
     },
     lpRemovedBaseTokens: function () {
-      if (this.poolValid)
+      if (this.poolValid && this.action.qty)
         try {
           return lpBaseTokens(this.action, this.pools[poolKey(this.action)], this.action._qtyPct, true)
         } catch (e) {
@@ -772,7 +791,7 @@ export default {
       return 0
     },
     lpRemovedQuoteTokens: function () {
-      if (this.poolValid)
+      if (this.poolValid && this.action.qty)
         try {
           return lpQuoteTokens(this.action, this.pools[poolKey(this.action)], this.action._qtyPct, true)
         } catch (e) {

@@ -244,7 +244,7 @@ const web3modal = createWeb3Modal({
 })
 
 import { ethers, BigNumber } from "ethers";
-import { ambientPosSlot, concPosSlot, roundForConcLiq } from '@crocswap-libs/sdk'
+import { ambientPosSlot, concPosSlot, roundForConcLiq, tickToPrice } from '@crocswap-libs/sdk'
 import cloneDeep from 'lodash.clonedeep'
 import * as Sentry from "@sentry/browser";
 
@@ -274,12 +274,12 @@ const RELAYERS = {
     endpoint: 'https://relayer.bus.bz/',
     acceptedTipTokens: {
       1: ["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", ZERO_ADDRESS, "0xdac17f958d2ee523a2206206994597c13d831ec7", "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", "0x6b175474e89094c44da98b954eedeac495271d0f"],
-      5: [ZERO_ADDRESS, "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "0xdc31Ee1784292379Fbb2964b3B9C4124D8F89C60", "0xc04b0d3107736c32e19f1c62b2af67be61d63a05"],
-      7700: [ZERO_ADDRESS, "0x80b5a32e4f032b2a058b4f29ec95eefeeb87adcd"],
-      42161: [ZERO_ADDRESS, "0xaf88d065e77c8cc2239327c5edb3a432268e5831", "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f"],
-      421613: [ZERO_ADDRESS, "0xc944b73fba33a773a4a07340333a3184a70af1ae", "0x5263e9d82352b8098cc811164c38915812bfc1e3", "0xc52f941486978a25fad837bb701d3025679780e4"],
-      534351: [ZERO_ADDRESS, '0x4d65fb724ced0cfc6abfd03231c9cdc2c36a587b'],
-      534352: [ZERO_ADDRESS, "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4"],
+      5: ["0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", ZERO_ADDRESS, "0xdc31Ee1784292379Fbb2964b3B9C4124D8F89C60", "0xc04b0d3107736c32e19f1c62b2af67be61d63a05"],
+      7700: ["0x80b5a32e4f032b2a058b4f29ec95eefeeb87adcd", ZERO_ADDRESS],
+      42161: ["0xaf88d065e77c8cc2239327c5edb3a432268e5831", ZERO_ADDRESS, "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f"],
+      421613: ["0xc944b73fba33a773a4a07340333a3184a70af1ae", ZERO_ADDRESS, "0x5263e9d82352b8098cc811164c38915812bfc1e3", "0xc52f941486978a25fad837bb701d3025679780e4"],
+      534351: ['0x4d65fb724ced0cfc6abfd03231c9cdc2c36a587b', ZERO_ADDRESS],
+      534352: ["0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4", ZERO_ADDRESS],
     }
   }
 }
@@ -413,6 +413,9 @@ export default {
         action.qty = pos.ambientLiq
         //action.qty = BigInt(pos.ambientLiq)
       }
+      if (pos.qty)
+        action.qty = pos.qty
+
       action.base = pos.base
       action.quote = pos.quote
       action.poolIdx = pos.poolIdx
@@ -932,11 +935,11 @@ export default {
 
       throw "Not enough DEX balance to cover the tip"
     },
-    // validates that the selected tip will work
-    tipValid: function (scmd) {
+    // validates that the selected or specified tip will work
+    tipValid: function (scmd, overrideTipToken = null) {
       // console.log('tipValid', scmd)
       try {
-        const tipToken = scmd._action._selectedTipToken
+        const tipToken = overrideTipToken ? overrideTipToken : scmd._action._selectedTipToken
         const clonedScmd = cloneDeep(scmd)
         clonedScmd._action.tip = { token: tipToken, amount: scmd._action._tipEstimates[tipToken].amount }
         return this.ensureBalance(clonedScmd)
@@ -1041,6 +1044,18 @@ export default {
         if (!signedCmd._action._tipEstimates.hasOwnProperty(signedCmd._action._selectedTipToken)) {
           signedCmd._action._selectedTipToken = ZERO_ADDRESS
         }
+
+        // find the first valid tip token and select it if the default isn't valid
+        let firstValid = null
+        for (const tipToken of Object.keys(signedCmd._action._tipEstimates)) {
+          const valid = this.tipValid(signedCmd, tipToken)
+          if (valid) {
+            firstValid = tipToken
+            break
+          }
+        }
+        if (!this.tipValid(signedCmd) && firstValid)
+          signedCmd._action._selectedTipToken = firstValid
       } catch (e) {
         this.estimating = false
         if (handleError) {
@@ -1340,6 +1355,8 @@ export default {
         this.$set(this.COLD_TOKENS[chainId], token.address, token)
       }
     },
+    // Catch-all function to get token info out of cache or fetch it from chain.
+    // @TODO: it should probably fetch everything (balance, surplus, allowance)
     fetchTokenInfo: async function (address, fetchSurplus = false) {
       if (!address)
         return
@@ -1517,8 +1534,8 @@ export default {
       }
       return swap
     },
-    parseTx: async function (txInput) {
-      txInput = txInput.toLowerCase().match(/0x[0-9a-f]+/)
+    parseTx: async function (origInput) {
+      let txInput = origInput.toLowerCase().match(/0x[0-9a-f]+/)
       if (!txInput)
         return
       txInput = txInput[0]
@@ -1530,11 +1547,13 @@ export default {
         const client = getPublicClient()
         try {
           const tx = await client.getTransaction({ hash: txInput })
+          // const receipt = await client.getTransactionReceipt({ hash: txInput })
+          // console.log(receipt)
           calldata = tx.input
           sender = tx.from
         } catch (e) {
           console.log(e)
-          result.description = "Couldn't fetch this transaction. Do you have the correct network selected?"
+          result.description = "Couldn't fetch this transaction. Are you connected to the correct network?"
           this.$set(this.parsedTxs, txInput, result)
           return
         }
@@ -1545,12 +1564,24 @@ export default {
         if (functionName == 'swap') {
           result.description = await this.describeSwap(args)
         } else if (functionName == 'userCmd' || functionName == 'userCmdRelayer') {
-          const { description, position } = await this.describeUserCmd(args[0], args[1], sender)
+          const { description, position, surplus } = await this.describeUserCmd(args[0], args[1], sender)
+          console.log(description, position, surplus)
           result.description = description
-          try {
-            await this.fetchMissingPool(position)
-          } catch (e) {
-            console.log('fetch parsed position failed', e)
+          result.position = position
+          result.surplus = surplus
+          if (position.base) {
+            try {
+              await this.fetchMissingPool(position)
+            } catch (e) {
+              console.log('fetch parsed position failed', e)
+            }
+          }
+          if (surplus.token) {
+            try {
+              await this.fetchSurpluses(sender, [surplus.token], false)
+            } catch (e) {
+              console.log('fetch parsed surplus failed', e)
+            }
           }
         } else {
           throw "unsupported"
@@ -1559,7 +1590,7 @@ export default {
       } catch (e) {
         console.log(e)
       }
-      this.$set(this.parsedTxs, txInput, result)
+      this.$set(this.parsedTxs, origInput, result)
     },
     describeSwap: async function (args) {
       let description = 'Swap'
@@ -1586,6 +1617,7 @@ export default {
     describeUserCmd: async function (callpath, cmd, sender) {
       let description = ""
       let position = { base: null, quote: null, bidTick: null, askTick: null, poolIdx: null, user: sender }
+      let surplus = { token: null }
       if (callpath == CROC_CHAINS[this.chainId].proxyPaths.liq) {
         const args = decodeAbiParameters([
           { name: 'code', type: 'uint8' },
@@ -1635,14 +1667,49 @@ export default {
           const base = await this.fetchTokenInfo(position.base)
           const quote = await this.fetchTokenInfo(position.quote)
           description = `${description} in ${base.symbol}/${quote.symbol} pool`
+
+          if (positionType == 'concentrated') {
+            const rangeMin = getFormattedNumber(parseFloat(toDisplayPrice(tickToPrice(position.askTick), base.decimals, quote.decimals, true)))
+            const rangeMax = getFormattedNumber(parseFloat(toDisplayPrice(tickToPrice(position.bidTick), base.decimals, quote.decimals, true)))
+            position._range = `${rangeMin} - ${rangeMax}`
+          }
         } catch (e) {
           console.log(e)
         }
-        console.log(description, position)
+
+      } else if (callpath == CROC_CHAINS[this.chainId].proxyPaths.long) {
+        description = 'Long form order (possibly repositioning)'
+        // @TODO: parse positions here?
+      } else if (callpath == CROC_CHAINS[this.chainId].proxyPaths.cold) {
+        const args = decodeAbiParameters(
+          [
+            { name: 'cmd', type: 'uint8' },
+          ], cmd)
+        console.log(args, cmd)
+
+        if ([73, 74, 75].indexOf(args[0]) != -1) {
+          const surplusArgs = decodeAbiParameters(
+            [
+              { name: 'cmd', type: 'uint8' },
+              { name: 'recv', type: 'address' },
+              { name: 'value', type: 'uint128' },
+              { name: 'token', type: 'address' },
+            ], cmd)
+          const actions = { 73: 'Deposit', 74: 'Withdraw', 75: 'Transfer' }
+          const token = await this.fetchTokenInfo(surplusArgs[3])
+          const reformatted = formatUnits(surplusArgs[2], token.decimals)
+          const dest = this.shortHash(surplusArgs[1], '…')
+          const qty = getFormattedNumber(parseFloat(reformatted))
+          surplus.token = surplusArgs[3].toLowerCase()
+          description = `${actions[surplusArgs[0]]} ${qty} ${token.symbol} to ${dest}`
+
+        } else {
+          throw 'bad cold cmd'
+        }
       } else {
         throw 'bad callpath'
       }
-      return { description, position }
+      return { description, position, surplus }
     },
     relayButtonDisabled: function (scmd) {
       let disabled = false
@@ -1788,8 +1855,8 @@ export default {
       const explorer = CROC_CHAINS[this.chainId].blockExplorer
       return `${explorer}tx/${hash}`
     },
-    shortHash: function (hash) {
-      return hash.slice(0, 6) + "..." + hash.slice(-4);
+    shortHash: function (hash, separator = '...') {
+      return hash.slice(0, 6) + separator + hash.slice(-4);
     },
     removeWaitingHash: function (hash) {
       this.$delete(this.waitingHashes, hash)
