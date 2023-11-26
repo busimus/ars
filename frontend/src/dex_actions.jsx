@@ -5,13 +5,13 @@ import cloneDeep from 'lodash.clonedeep'
 const BASE_COMMAND = {
   _description: "Unknown command",
   // _gasless: true,
-  _gasless: true,
+  _gasless: false,
   _relayerAddr: null,
   _relayManually: false,
   _selectedRelayer: 'bus',
   _selectedTipToken: null,
-  _baseSurplus: true,
-  _quoteSurplus: true,
+  _baseSurplus: false,
+  _quoteSurplus: false,
   _tipEstimates: { null: { text: 'No estimate yet', value: null, amount: 0 } },
   _gasPrice: null,
   tip: {

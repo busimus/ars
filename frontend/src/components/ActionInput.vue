@@ -20,7 +20,7 @@
             </b-tooltip>
           </b-form-group>
           <CoinSelector :address="action._fromToken" @update:address="a => { setSwapToken('from', a) }" :tokens="tokens"
-            :cold_tokens="coldTokens" :balances="balances" @fetchToken="t => $emit('fetchToken', t)" />
+            :cold_tokens="coldTokens" :balances="surpluses" @fetchToken="t => $emit('fetchToken', t)" />
         </div>
         <div style="text-align: center;">
           <b-button v-b-hover="h => invertSwapIcon = h" @click="invertSwap" variant="outline-dark"
@@ -37,7 +37,7 @@
                 @click.prevent="setSwapToMax('to')">Max</a></small> -->
           </b-form-group>
           <CoinSelector :address="action._toToken" @update:address="a => { setSwapToken('to', a) }" :tokens="tokens"
-            :cold_tokens="coldTokens" :balances="balances" @fetchToken="t => $emit('fetchToken', t)" />
+            :cold_tokens="coldTokens" :balances="surpluses" @fetchToken="t => $emit('fetchToken', t)" />
         </div>
         <div class="border rounded p-2" v-if="action._estimate != null && action._estimate.success"
           style="display: flex; flex-direction:column; gap: 0.25rem; margin-top: 1rem">
@@ -81,7 +81,7 @@
                 @click.prevent="setWithdrawMax">Max</a></small>
           </b-form-group>
           <CoinSelector :address="action.token" @update:address="a => { action.token = a; setWithdrawMax() }"
-            :tokens="tokens" :cold_tokens="coldTokens" :balances="balances" @fetchToken="t => $emit('fetchToken', t)" />
+            :tokens="tokens" :cold_tokens="coldTokens" :balances="surpluses" @fetchToken="t => $emit('fetchToken', t)" />
         </div>
       </div>
       <div v-else-if="actionType == 'transfer'">
@@ -99,7 +99,7 @@
                 @click.prevent="setWithdrawMax">Max</a></small>
           </b-form-group>
           <CoinSelector :address="action.token" @update:address="a => { action.token = a; setWithdrawMax() }"
-            :tokens="tokens" :cold_tokens="coldTokens" :balances="balances" @fetchToken="t => $emit('fetchToken', t)" />
+            :tokens="tokens" :cold_tokens="coldTokens" :balances="surpluses" @fetchToken="t => $emit('fetchToken', t)" />
         </div>
       </div>
       <div v-else-if="actionType == 'deposit'">
@@ -145,11 +145,11 @@
             <CoinSelector :label="'Base token'" :address="action.base" @update:address="a => { action.base = a }"
               :useSurplus="action._baseSurplus" :surplusDirection="'to'"
               @update:useSurplus="u => { action._baseSurplus = u }" :tokens="tokens" :cold_tokens="coldTokens"
-              :balances="balances" @fetchToken="t => $emit('fetchToken', t)" style="flex: 1" />
+              :balances="surpluses" @fetchToken="t => $emit('fetchToken', t)" style="flex: 1" />
             <CoinSelector :label="'Quote token'" :address="action.quote" @update:address="a => { action.quote = a }"
               :useSurplus="action._quoteSurplus" :surplusDirection="'to'"
               @update:useSurplus="u => { action._quoteSurplus = u }" :tokens="tokens" :cold_tokens="coldTokens"
-              :balances="balances" @fetchToken="t => $emit('fetchToken', t)" style="flex: 1" />
+              :balances="surpluses" @fetchToken="t => $emit('fetchToken', t)" style="flex: 1" />
           </div>
         </b-form-group>
         <div v-if="actionType == 'removeConcLp'" style="display: flex; gap: 0.4rem">
@@ -194,11 +194,11 @@
         </div>
       </div>
       <div v-else-if="actionType == 'parse'">
-        <div class="text-center p-1">You can use this to load missing positions</div>
+        <div class="text-center p-1">You can use this to load missing positions for the currently connected address</div>
         <a href="#collapseIndicatorChevronDark" v-b-toggle.collapse-howto @click.prevent class="text-center"
           style="display: block;  margin-bottom: 0.5rem;" data-bs-toggle="collapse" aria-expanded="false"
           aria-controls="collapseIndicatorChevronDark">
-          How to
+          Instructions
           <b-icon-chevron-down class="when-closed" />
           <b-icon-chevron-up class="when-open" />
         </a>
@@ -363,7 +363,7 @@ export default {
     pools: Object,
     tokens: Object,
     coldTokens: Object,
-    balances: Object,
+    surpluses: Object,
     walletBalances: Object,
     allowances: Object,
     parsedTxs: Object,
@@ -435,7 +435,7 @@ export default {
       this.action.recv = this.address
     },
     setWithdrawMax: function () {
-      const balance = this.balances[this.action.token]
+      const balance = this.surpluses[this.action.token]
       if (!balance)
         return
       this.action._qtyRaw = balance.raw
@@ -450,13 +450,13 @@ export default {
     },
     setSwapToMax: function (side) {
       if (side == 'from') {
-        const balance = this.balances[this.action._fromToken]
+        const balance = this.surpluses[this.action._fromToken]
         if (balance)
           this.action._fromQty = balance.string
         this.swapInputHandler(this.action._fromQty, 0)
       } else if (side == 'to') {
         // remove this lmao
-        const balance = this.balances[this.action._toToken]
+        const balance = this.surpluses[this.action._toToken]
         if (balance)
           this.action._toQty = balance.string
         this.swapInputHandler(0, this.action._toQty)
@@ -603,7 +603,7 @@ export default {
         if (this.actionType == 'withdraw' || this.actionType == 'transfer') {
           let qty = a._qtyRaw
           if (qty == 0n)
-            qty = this.balances[a.token]
+            qty = this.surpluses[a.token]
           const reformatted = formatUnits(qty, this.tokens[a.token].decimals)
           const amount = getFormattedNumber(parseFloat(reformatted))
           const shortRecv = `${a.recv.substring(0, 8)}…${a.recv.substring(36)}`;
@@ -687,7 +687,7 @@ export default {
     },
     dexBalanceHuman: function (tokenAddress) {
       const token = this.tokens[tokenAddress]
-      const balance = this.balances[tokenAddress]
+      const balance = this.surpluses[tokenAddress]
       if (!balance || !token)
         return '...'
       return balance.human
@@ -743,7 +743,7 @@ export default {
         if (a._qtyRaw <= 0)
           return true
       } else if (a._type == 'swap') {
-        if (a._fromToken && this.balances[a._fromToken] && a._fromQtyRaw > this.balances[a._fromToken].raw)
+        if (a._fromToken && this.surpluses[a._fromToken] && a._fromQtyRaw > this.surpluses[a._fromToken].raw)
           return true
       }
     },

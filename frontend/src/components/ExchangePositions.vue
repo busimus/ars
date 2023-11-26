@@ -16,12 +16,12 @@
         <b-icon-arrow-clockwise :class="{ 'icon-spin': refreshing > 0 }" />
       </b-button>
     </div>
-    <div v-if="!address || (refreshing > 0 && !skeletoned && Object.keys(balances).length == 0)" style="display: flex;">
+    <div v-if="!address || (refreshing > 0 && !skeletoned && Object.keys(surpluses).length == 0)" style="display: flex;">
       <b-skeleton-table :animation="address ? undefined : null" :rows="3" :columns="4" hide-header
         :table-props="{ bordered: false, striped: true }"></b-skeleton-table>
     </div>
-    <div v-else-if="(refreshing == 0 || skeletoned) && Object.values(balances).filter((b) => b.raw > 0n).length == 0"
-      class="text-center">No balances
+    <div v-else-if="(refreshing == 0 || skeletoned) && Object.values(surpluses).filter((b) => b.raw > 0n).length == 0"
+      class="text-center">No surpluses
       found</div>
     <table id="tokenTable" v-else>
       <thead>
@@ -32,7 +32,7 @@
           <th scope="col"></th>
         </tr>
       </thead>
-      <tr v-for="(balance, addr) in balances" v-if="balance.raw > 0n">
+      <tr v-for="(balance, addr) in surpluses" v-if="balance.raw > 0n">
         <td>{{ tokens[addr].symbol }}</td>
         <td class="text-truncate" style="max-width: 0; padding-right: 0.5rem;">{{ addr }}</td>
         <td>{{ balance.human }}</td>
@@ -130,7 +130,7 @@ export default {
   },
   props: {
     address: String,
-    balances: Object,
+    surpluses: Object,
     tokens: Object,
     positions: Object,
     pools: Object,

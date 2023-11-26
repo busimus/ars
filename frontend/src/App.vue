@@ -37,12 +37,19 @@
             <span style="text-align: center;">Connect wallet to see positions and balances</span>
           </div>
           <div id="w3-connected" v-else class="border" @click="w3modal">
-            <span style="margin-top: auto; margin-bottom: auto;"><strong>{{ this.ethBalance }}</strong></span>
+            <span style="margin-top: auto; margin-bottom: auto; white-space: pre;">
+              <b-avatar id="chainImage" size="sm" :src="CHAIN_IMAGES[this.chainId || 1]"></b-avatar>
+              <b-tooltip target="chainImage" triggers="hover">
+                Connected to {{chain.chain.name}}
+              </b-tooltip>
+              <strong style="margin-left: 0.3rem; vertical-align: middle;">{{ this.ethBalance }}</strong>
+            </span>
             <b-button id="w3-address-pill" :class="{ 'with-avatar': this.ensAvatar }" pill variant="primary"
               @click="w3modal">
               <b-avatar size="sm" v-if="this.ensAvatar" :src="this.ensAvatar"></b-avatar>
+              <span style="overflow: hidden; text-overflow: ellipsis;">
               {{ this.ensName ? this.ensName :
-                shortHash(this.address) }}
+                shortHash(this.address) }}</span>
             </b-button>
           </div>
           <div v-if="chainError" class="text-danger" style="margin-top: 0.5rem">
@@ -86,7 +93,7 @@
       <div id="flex-wrap"
         style="display: flex; gap: 0.5rem; flex-wrap: wrap; width: 100%; justify-content: center; margin-bottom: 0.5rem">
         <ExchangePositions v-if="address" class="main-panel border shadow-sm rounded" style="width: 100%; height: auto"
-          :address="address" :balances="balances" :tokens="TOKENS[chainId]" :positions="positions" :pools="pools"
+          :address="address" :surpluses="surpluses" :tokens="TOKENS[chainId]" :positions="positions" :pools="pools"
           :refreshing="refreshing" @refresh="refreshData" @withdraw="(a) => setWithdrawTarget(a, true)"
           @transfer="(a) => setWithdrawTarget(a, false)" @removeLp="setRemoveLp" />
         <!-- there were too many props ten props ago -->
@@ -94,7 +101,7 @@
           @perform="performAction" @fetchToken="a => fetchTokenInfo(a, true)"
           @fetchWalletBalance="a => fetchWalletBalance(a)" @approve="sendApproveTx"
           @fetchPool="pos => fetchMissingPool(pos)" @parseTx="parseTx" :fetchSwapOutput="fetchSwapOutput" :pools="pools"
-          :tokens="TOKENS[chainId]" :coldTokens="COLD_TOKENS[chainId]" :balances="balances"
+          :tokens="TOKENS[chainId]" :coldTokens="COLD_TOKENS[chainId]" :surpluses="surpluses"
           :walletBalances="walletBalances" :allowances="allowances" :parsedTxs="parsedTxs" :address="address"
           :signing="signing" :canSign="canSign" :crocChain="CHAINS[chainId]" />
       </div>
@@ -231,16 +238,28 @@ const wagmiConfig = defaultWagmiConfig({
   }
 })
 
+import chain1 from './assets/chains/1.webp'
+import chain5 from './assets/chains/5.webp'
+import chain7700 from './assets/chains/7700.webp'
+import chain42161 from './assets/chains/42161.webp'
+import chain421613 from './assets/chains/421613.webp'
+import chain534351 from './assets/chains/534351.webp'
+import chain534352 from './assets/chains/534352.webp'
+
+const chainImages = {
+    1: chain1,
+    5: chain5,
+    7700: chain7700,
+    42161: chain42161,
+    421613: chain421613,
+    534351: chain534351,
+    534352: chain534352,
+
+}
+
 const web3modal = createWeb3Modal({
   wagmiConfig, projectId, chains, themeMode: 'dark',
-  chainImages: {
-    5: 'https://s2.coinmarketcap.com/static/img/coins/200x200/23669.png',
-    7700: 'https://icons.llamao.fi/icons/chains/rsz_canto.jpg',
-    42161: 'https://icons.llamao.fi/icons/chains/rsz_arbitrum.jpg',
-    421613: 'https://icons.llamao.fi/icons/chains/rsz_arbitrum.jpg',
-    534351: 'https://icons.llamao.fi/icons/chains/rsz_scroll',
-    534352: 'https://icons.llamao.fi/icons/chains/rsz_scroll',
-  }
+  chainImages
 })
 
 import { ethers, BigNumber } from "ethers";
@@ -326,7 +345,7 @@ export default {
       chain: undefined,
       graphcache: gc,
       positions: {},
-      balances: {},
+      surpluses: {},
       walletBalances: {},
       allowances: {},
       pools: {},
@@ -349,6 +368,7 @@ export default {
       RELAYERS,
       TOKENS,
       CHAINS: CROC_CHAINS,
+      CHAIN_IMAGES: chainImages,
       COLD_TOKENS: { 1: {}, 5: {}, 7700: {}, 42161: {}, 421613: {}, 534351: {}, 534352: {} },
 
       ethBalance: '',
@@ -392,9 +412,9 @@ export default {
       if (!withdraw)
         action = cloneDeep({ ...COMMANDS.transfer })
       action.token = tokenAddr
-      action.qty = this.balances[tokenAddr].string
-      action._qtyRaw = this.balances[tokenAddr].raw
-      action._qtyDecimals = this.balances[tokenAddr].decimals
+      action.qty = this.surpluses[tokenAddr].string
+      action._qtyRaw = this.surpluses[tokenAddr].raw
+      action._qtyDecimals = this.surpluses[tokenAddr].decimals
       console.log('setting action', action)
       this.$refs.actionInput.setAction(action)
       this.$nextTick(() => {
@@ -836,10 +856,10 @@ export default {
     ensureBalance: function (scmd) {
       const tip = scmd._action.tip;
       const a = scmd._action;
-      const tipTokenBalance = this.balances[tip.token] ? this.balances[tip.token].raw : 0n
+      const tipTokenBalance = this.surpluses[tip.token] ? this.surpluses[tip.token].raw : 0n
       console.log('scmd', scmd)
       // console.log('tip', tip, tipTokenBalance)
-      // console.log(this.balances)
+      // console.log(this.surpluses)
 
       // If withdrawing/transfering the tip token adjust withdrawan amount if needed
       if ((a._type == 'withdraw' || a._type == 'transfer') && a.token == tip.token) {
@@ -1155,8 +1175,8 @@ export default {
       if (!this.address || !this.chainId)
         return
       this.refreshing += 1
-      const refreshables = [this.fetchUserInfo(), this.fetchPositions(this.address), this.fetchSurpluses(this.address, [], true),]
-      // const refreshables = [await this.fetchSurpluses(this.address, [], true),]
+      const refreshables = [this.fetchUserInfo(), this.fetchPositions(this.address), this.fetchSurpluses(this.address, []),]
+      // const refreshables = [await this.fetchSurpluses(this.address, []),]
       if (this.signed.selected) {
         refreshables.push(this.estimateTips(this.signed.options.find(o => o.sig == this.signed.selected)))
       }
@@ -1186,7 +1206,7 @@ export default {
     resetData: function (pools = false, positions = false) {
       if (this.$refs.actionInput) // ????
         this.$refs.actionInput.resetAction()
-      this.balances = {}
+      this.surpluses = {}
       this.walletBalances = {}
       this.allowances = {}
       this.parsedTxs = {}
@@ -1319,8 +1339,8 @@ export default {
       pos.user = this.address
       await this.fetchPools({ p: pos })
       await this.fetchPositionsLiq({ p: pos })
-      pos._baseDecimals = (await this.fetchTokenInfo(pos.base)).decimals
-      pos._quoteDecimals = (await this.fetchTokenInfo(pos.quote)).decimals
+      pos._baseDecimals = (await this.fetchTokenInfo(pos.base, true)).decimals
+      pos._quoteDecimals = (await this.fetchTokenInfo(pos.quote, true)).decimals
       if (pos.qty) {
         if (pos.positionType == 'concentrated')
           pos.slot = concPosSlot(this.address, pos.base, pos.quote, pos.bidTick, pos.askTick, pos.poolIdx).toString()
@@ -1379,7 +1399,7 @@ export default {
           return
         }
       }
-      if (fetchSurplus && this.address && this.balances[address] == undefined) {
+      if (fetchSurplus && this.address && this.surpluses[address] == undefined) {
         this.fetchSurpluses(this.address, [address])
       }
       return token
@@ -1415,16 +1435,18 @@ export default {
       console.log('allowances', dump(this.allowances))
     },
     // fetches DEX balances either for given tokens, or tokens from the indexer, and optionally adds all current balances to either list
-    fetchSurpluses: async function (owner, tokens = [], includeKnownBalances = false) {
+    fetchSurpluses: async function (owner, tokens = []) {
       try {
-        if (tokens.length == 0)
-          tokens = (await this.graphcache.user_balance_tokens(owner, numberToHex(this.chainId))).tokens
-        if (includeKnownBalances) {
-          for (const tokenAddr of Object.keys(this.balances))
-            if (!tokens.includes(tokenAddr))
-              tokens.push(tokenAddr)
+        if (tokens.length == 0) {
+          try {
+            tokens = (await this.graphcache.user_balance_tokens(owner, numberToHex(this.chainId))).tokens
+          } catch (e) {
+            console.error("user_balance_tokens error")
+          }
         }
-        // @TODO: maybe remove for prod
+        for (const tokenAddr of Object.keys(this.surpluses))
+          if (!tokens.includes(tokenAddr))
+            tokens.push(tokenAddr)
         if (tokens.indexOf(ZERO_ADDRESS) == -1)
           tokens.unshift(ZERO_ADDRESS)
         const someToken = getSomeTokenForChain(this.chainId)
@@ -1443,7 +1465,7 @@ export default {
             balance.string = formatUnits(balance.raw, token.decimals)
             balance.float = parseFloat(balance.string)
             balance.human = getFormattedNumber(balance.float)
-            this.$set(this.balances, tokenAddr, balance)
+            this.$set(this.surpluses, tokenAddr, balance)
           } catch (e) {
             console.error('surplus fetch error', e)
           }
@@ -1451,7 +1473,7 @@ export default {
       } catch (e) {
         console.error('fetchSurpluses error', e)
       }
-      console.log('surpluses', dump(this.balances))
+      console.log('surpluses', dump(this.surpluses))
     },
     fetchSurplusAmounts: async function (owner, tokens) {
       const client = getPublicClient()
@@ -1547,6 +1569,11 @@ export default {
         const client = getPublicClient()
         try {
           const tx = await client.getTransaction({ hash: txInput })
+          if (!tx.to ||  tx.to.toLowerCase() != CROC_CHAINS[this.chainId].addrs.dex.toLowerCase()) {
+            result.description = "Not an Ambient transaction"
+            this.$set(this.parsedTxs, origInput, result)
+            return
+          }
           // const receipt = await client.getTransactionReceipt({ hash: txInput })
           // console.log(receipt)
           calldata = tx.input
@@ -1554,7 +1581,7 @@ export default {
         } catch (e) {
           console.log(e)
           result.description = "Couldn't fetch this transaction. Are you connected to the correct network?"
-          this.$set(this.parsedTxs, txInput, result)
+          this.$set(this.parsedTxs, origInput, result)
           return
         }
       }
@@ -1578,7 +1605,7 @@ export default {
           }
           if (surplus.token) {
             try {
-              await this.fetchSurpluses(sender, [surplus.token], false)
+              await this.fetchSurpluses(sender, [surplus.token])
             } catch (e) {
               console.log('fetch parsed surplus failed', e)
             }
@@ -1806,11 +1833,9 @@ export default {
       const client = getPublicClient()
       let [ensName, balance] = await Promise.allSettled([client.getEnsName({ address: this.address }), client.getBalance({ address: this.address })]);
 
-      let symbol = 'ETH'
-      if ([goerli.id, scrollSepolia.id, arbitrumGoerli.id].includes(this.chainId))
-        symbol = 'gETH'
-      else if (this.chainId == canto.id)
-        symbol = 'CANTO'
+      let symbol = this.chain.chain.nativeCurrency.symbol
+      if (this.chain.chain.testnet)
+        symbol = 'g' + symbol
       if (balance.status == 'fulfilled')
         this.ethBalance = `${getFormattedNumber(parseFloat(formatEther(balance.value)))} ${symbol}`
       if (ensName.status == 'fulfilled')
@@ -2066,12 +2091,14 @@ w3m-balance {
 }
 
 #w3-address-pill {
-  margin: 0.1rem 0 0.1rem 0;
+  margin: 0.1rem 0 0.1rem 0.3rem;
   display: flex;
   justify-content: space-between;
   gap: 0.2rem;
   padding: 0.3rem 0.5rem 0.3rem 0.3rem;
   font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .with-avatar {
