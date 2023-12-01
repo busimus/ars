@@ -40,7 +40,7 @@
             <span style="margin-top: auto; margin-bottom: auto; white-space: pre;">
               <b-avatar id="chainImage" size="sm" :src="CHAIN_IMAGES[this.chainId || 1]"></b-avatar>
               <b-tooltip target="chainImage" triggers="hover">
-                Connected to {{chain.chain.name}}
+                Connected to {{ chain.chain.name }}
               </b-tooltip>
               <strong style="margin-left: 0.3rem; vertical-align: middle;">{{ this.ethBalance }}</strong>
             </span>
@@ -48,8 +48,8 @@
               @click="w3modal">
               <b-avatar size="sm" v-if="this.ensAvatar" :src="this.ensAvatar"></b-avatar>
               <span style="overflow: hidden; text-overflow: ellipsis;">
-              {{ this.ensName ? this.ensName :
-                shortHash(this.address) }}</span>
+                {{ this.ensName ? this.ensName :
+                  shortHash(this.address) }}</span>
             </b-button>
           </div>
           <div v-if="chainError" class="text-danger" style="margin-top: 0.5rem">
@@ -197,6 +197,7 @@ import {
   toDisplayPrice,
   poolKey,
   dump,
+  shortHash,
 } from "./utils.jsx";
 import {
   BAvatar,
@@ -247,13 +248,13 @@ import chain534351 from './assets/chains/534351.webp'
 import chain534352 from './assets/chains/534352.webp'
 
 const chainImages = {
-    1: chain1,
-    5: chain5,
-    7700: chain7700,
-    42161: chain42161,
-    421613: chain421613,
-    534351: chain534351,
-    534352: chain534352,
+  1: chain1,
+  5: chain5,
+  7700: chain7700,
+  42161: chain42161,
+  421613: chain421613,
+  534351: chain534351,
+  534352: chain534352,
 
 }
 
@@ -268,7 +269,7 @@ import cloneDeep from 'lodash.clonedeep'
 import * as Sentry from "@sentry/browser";
 
 import { watchAccount, watchNetwork, signTypedData } from '@wagmi/core'
-import { encodeAbiParameters, toHex, numberToHex, hexToBigInt, formatUnits, formatEther, UserRejectedRequestError, parseUnits, parseEther, encodeFunctionData, decodeFunctionData, decodeAbiParameters } from 'viem'
+import { encodeAbiParameters, toHex, numberToHex, hexToBigInt, formatUnits, formatEther, UserRejectedRequestError, parseUnits, parseEther, encodeFunctionData, decodeFunctionData, decodeAbiParameters, recoverTypedDataAddress, signatureToHex } from 'viem'
 import { normalize } from 'viem/ens'
 import { signERC2612Permit } from './permit.jsx'
 
@@ -367,6 +368,7 @@ export default {
       chainError: false,
       RELAYERS,
       TOKENS,
+      shortHash,
       CHAINS: CROC_CHAINS,
       CHAIN_IMAGES: chainImages,
       COLD_TOKENS: { 1: {}, 5: {}, 7700: {}, 42161: {}, 421613: {}, 534351: {}, 534352: {} },
@@ -1140,8 +1142,7 @@ export default {
         throw e
       }
     },
-    signData: async function (callpath, cmd, conds, tip) {
-      console.log("chainId", this.chainId)
+    getTypedMessageArgs: function (callpath, cmd, conds, tip) {
       const domain = {
         name: "CrocSwap",
         chainId: this.chainId,
@@ -1161,10 +1162,11 @@ export default {
       }
 
       const message = { callpath, cmd, conds, tip }
+      return { domain, types, message, primaryType: 'CrocRelayerCall' }
 
-      const signature = await signTypedData({
-        domain, types, message, primaryType: 'CrocRelayerCall',
-      })
+    },
+    signData: async function (callpath, cmd, conds, tip) {
+      const signature = await signTypedData(this.getTypedMessageArgs(callpath, cmd, conds, tip))
       return signature
     },
     // refresh all data for the current address
@@ -1561,15 +1563,16 @@ export default {
       if (!txInput)
         return
       txInput = txInput[0]
+      this.$delete(this.parsedTxs, origInput)
       console.log('parseTx', txInput)
-      const result = { success: false, description: "Couldn't parse this transaction" }
+      const result = { success: false, description: "Couldn't parse this transaction", relayer: null }
       let calldata = txInput
       let sender = this.address
       if (txInput.length == 66) {
         const client = getPublicClient()
         try {
           const tx = await client.getTransaction({ hash: txInput })
-          if (!tx.to ||  tx.to.toLowerCase() != CROC_CHAINS[this.chainId].addrs.dex.toLowerCase()) {
+          if (!tx.to || tx.to.toLowerCase() != CROC_CHAINS[this.chainId].addrs.dex.toLowerCase()) {
             result.description = "Not an Ambient transaction"
             this.$set(this.parsedTxs, origInput, result)
             return
@@ -1614,14 +1617,17 @@ export default {
           throw "unsupported"
         }
         result.success = true
+        if (functionName == 'userCmdRelayer') {
+          result.relayer = await this.describeRelayer(args)
+        }
       } catch (e) {
         console.log(e)
       }
+      console.log(result)
       this.$set(this.parsedTxs, origInput, result)
     },
     describeSwap: async function (args) {
       let description = 'Swap'
-      // try {
       const base = await this.fetchTokenInfo(args[0])
       const quote = await this.fetchTokenInfo(args[1])
       const reformatted = formatUnits(args[5], args[4] ? base.decimals : quote.decimals)
@@ -1636,9 +1642,6 @@ export default {
       } else if (args[3] == false && args[4] == true) {
         description = `${description} ${quote.symbol} for ${qty} ${base.symbol}`
       }
-      // } catch (e) {
-
-      // }
       return description
     },
     describeUserCmd: async function (callpath, cmd, sender) {
@@ -1712,7 +1715,6 @@ export default {
           [
             { name: 'cmd', type: 'uint8' },
           ], cmd)
-        console.log(args, cmd)
 
         if ([73, 74, 75].indexOf(args[0]) != -1) {
           const surplusArgs = decodeAbiParameters(
@@ -1737,6 +1739,42 @@ export default {
         throw 'bad callpath'
       }
       return { description, position, surplus }
+    },
+    describeRelayer: async function (args) {
+      try {
+        const splSig = decodeAbiParameters(
+          [
+            { name: 'v', type: 'uint8' },
+            { name: 'r', type: 'uint256' },
+            { name: 's', type: 'uint256' },
+          ],
+          args[4])
+        const rawSig = signatureToHex({ v: splSig[0], r: splSig[1], s: splSig[2] })
+        const typedArgs = this.getTypedMessageArgs(args[0], args[1], args[2], args[3])
+        typedArgs.signature = rawSig
+        const signer = await recoverTypedDataAddress(typedArgs)
+        let tip = '0'
+        try {
+          if (args[3] != '0x') {
+            const tipArgs = decodeAbiParameters(
+              [
+                { name: 'token', type: 'address' },
+                { name: 'amount', type: 'uint128' },
+                { name: 'recv', type: 'address' },
+              ],
+              args[3])
+            const token = await this.fetchTokenInfo(tipArgs[0])
+            const tipQty = getFormattedNumber(parseFloat(formatUnits(tipArgs[1], token.decimals)))
+            tip = `${tipQty} ${token.symbol}`
+          }
+        } catch (e) {
+          console.log('tip error', e)
+          tip = "decoding error"
+        }
+        return { signer, tip }
+      } catch (e) {
+        throw 'bad relayer'
+      }
     },
     relayButtonDisabled: function (scmd) {
       let disabled = false
@@ -1879,9 +1917,6 @@ export default {
     txLink: function (hash) {
       const explorer = CROC_CHAINS[this.chainId].blockExplorer
       return `${explorer}tx/${hash}`
-    },
-    shortHash: function (hash, separator = '...') {
-      return hash.slice(0, 6) + separator + hash.slice(-4);
     },
     removeWaitingHash: function (hash) {
       this.$delete(this.waitingHashes, hash)

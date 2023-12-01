@@ -232,6 +232,14 @@
           <div class="text-danger"
             v-else-if="parsedTxs[action.txInput].position && parsedTxs[action.txInput].position.qty == 0">Position has no
             liquidity</div>
+          <div v-if="parsedTxs[action.txInput].relayer">
+            <hr style="margin: 0.5rem 0 0.5rem 0;" />
+            Signer: <a :href="addressLink(parsedTxs[action.txInput].relayer.signer)" target="_blank">{{
+              shortHash(parsedTxs[action.txInput].relayer.signer, '…', 6)
+            }}</a>
+            <br />
+            Tip: {{ parsedTxs[action.txInput].relayer.tip }}
+          </div>
         </div>
         <div v-else-if="parsedTxs[action.txInput] != null && !parsedTxs[action.txInput].success"
           class="border rounded text-center p-2 text-danger" style="margin-top: 1rem">
@@ -248,8 +256,8 @@
         Most commands can be automatically filled in using buttons in the exchange pane
       </div>
       <div v-if="actionType && actionType != 'parse'" style="display: flex; justify-content: center; margin-top: 0.7rem">
-        <b-form-checkbox id="checkbox-gasless" v-model="action._gasless" @change="gaslessChanged" name="checkbox-gasless" switch
-          size="lg">
+        <b-form-checkbox id="checkbox-gasless" v-model="action._gasless" @change="gaslessChanged" name="checkbox-gasless"
+          switch size="lg">
           Gasless
         </b-form-checkbox>
         <b-icon-question-circle id="gaslessQuestion" style="margin: 0.5rem 0 0 0.5rem" />
@@ -303,7 +311,7 @@ import { parseUnits, formatUnits } from "viem"
 import { fromDisplayPrice, encodeCrocPrice, tickToPrice, priceToTick, toDisplayPrice } from '@crocswap-libs/sdk'
 import { getFormattedNumber } from "../number_formatting.jsx"
 import { COMMANDS } from '../dex_actions.jsx'
-import { isValidAddress, lpBaseTokens, lpQuoteTokens, poolKey, getSomeTokenForChain } from '../utils.jsx'
+import { isValidAddress, lpBaseTokens, lpQuoteTokens, poolKey, getSomeTokenForChain, shortHash } from '../utils.jsx'
 import { SETTLE_TO_WALLET, BASE_TO_DEX, QUOTE_TO_DEX, SETTLE_TO_DEX } from "../dex_actions";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
@@ -356,6 +364,7 @@ export default {
       GASLESS_DEPOSIT_INFO,
       PERMIT_SUPPORT,
       NO_PERMIT_SUPPORT,
+      shortHash,
     };
   },
   emits: ['perform', 'fetchToken', 'fetchWalletBalance', 'fetchPool', 'approve', 'parseTx'],
@@ -526,7 +535,7 @@ export default {
       [this.action._fromToken, this.action._toToken] = [this.action._toToken, this.action._fromToken];
       this.swapInputHandler(this.action._fromQty, 0)
     },
-    gaslessChanged: function(gaslessEnabled) {
+    gaslessChanged: function (gaslessEnabled) {
       // since LP removal to surplus balance only makes sense in gasless cases,
       // it'll be a better UX to disable disable surplus when gasless is disabled
       this.action._baseSurplus = gaslessEnabled
@@ -718,6 +727,9 @@ export default {
         this.action.token = someToken
         this.$emit('fetchWalletBalance', someToken)
       }
+    },
+    addressLink: function (address) {
+      return `${this.crocChain.blockExplorer}address/${address}`
     }
   },
   computed: {

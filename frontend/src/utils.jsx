@@ -92,3 +92,7 @@ export function getSomeTokenForChain(chainId) {
   else
     throw "chain not supported"
 }
+
+export function shortHash(hash, separator = '...', length = 4) {
+  return hash.slice(0, 2 + length) + separator + hash.slice(-1 * length);
+}
