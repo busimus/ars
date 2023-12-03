@@ -43,7 +43,7 @@
           style="display: flex; flex-direction:column; gap: 0.25rem; margin-top: 1rem">
           <div style="display: flex; justify-content: space-between;">
             <span style="margin: auto 0; padding: 0.1rem 0;">{{ action._estimate.slipDirection < 0 ? 'Minimum output'
-              : 'Maximum input' }}</span><span>{{ swapResultHuman(action)
+              : 'Maximum input' }}</span><span>{{ !action._estimate.stale ? swapResultHuman(action) : "..."
   }}</span>
           </div>
           <div style="display: flex; justify-content: space-between;">
@@ -384,16 +384,12 @@ export default {
   },
   methods: {
     setAction: function (action) {
+      action = cloneDeep({ ...action }) // race condition or somethin idk
       this.action = { ...action }
       // yeah i think i'm done with Vue.
       this.$nextTick(() => {
         this.action = { ...action };
-        if (this.action._type == 'swap')
-          this.preFillAction()
-        else if (this.action._type == 'removeConcLp') {
-          this.reparseTick('min')
-          this.reparseTick('max')
-        }
+        this.preFillAction()
       })
       // all of these don't work:
       // this.action = Object.assign({}, this.action, {...action})
@@ -419,7 +415,11 @@ export default {
     },
     // converts action._rangeMin to action.bidTick or whatever depending on side
     reparseTick: function (side, emitFetch = false) {
-      const pool = this.pools[poolKey(this.action)]
+      let pool = null
+      try {
+        pool = this.pools[poolKey(this.action)]
+      } catch (e) {
+      }
       if (!pool)
         return
       const baseDec = this.tokens[this.action.base].decimals
@@ -515,6 +515,8 @@ export default {
       } else {
         return
       }
+      if (this.action._estimate)
+        this.action._estimate.stale = true
       this.swapDebouncer += 1
       const reqTime = Date.now()
       if (this.swapDebouncer <= 1) {
@@ -571,7 +573,7 @@ export default {
 
       const swap = await this.fetchSwapOutput(this.action._fromToken, this.action._toToken, this.action.poolIdx, qtyFrom, qtyTo, this.action._slippage)
       console.log('swapOutput', swap)
-      if (this.action._estimateTime > reqTime) {
+      if (this.action._estimateTime > reqTime || this.actionType != 'swap') {
         console.log('stale swap output, dropping')
         return
       }
@@ -723,8 +725,15 @@ export default {
       if (this.action._type == 'swap') {
         this.action._fromToken = someToken
         this.action._toToken = ZERO_ADDRESS
+      } else if (this.action._type == 'removeConcLp') {
+        if (this.poolValid) {
+          this.reparseTick('min')
+          this.reparseTick('max')
+        }
       } else if (['deposit', 'withdraw', 'transfer'].indexOf(this.action._type) != -1) {
-        this.action.token = someToken
+        if (!this.action.token) {
+          this.action.token = someToken
+        }
         this.$emit('fetchWalletBalance', someToken)
       }
     },
@@ -755,7 +764,7 @@ export default {
         if (a._qtyRaw <= 0)
           return true
       } else if (a._type == 'swap') {
-        if (a._fromToken && this.surpluses[a._fromToken] && a._fromQtyRaw > this.surpluses[a._fromToken].raw)
+        if ((a._fromToken && this.surpluses[a._fromToken] && a._fromQtyRaw > this.surpluses[a._fromToken].raw) || (!a._estimate || (a._estimate && a._estimate.stale)))
           return true
       }
     },

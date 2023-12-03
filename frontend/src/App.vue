@@ -388,7 +388,7 @@ export default {
     accountChanged: function (account) {
       console.log('accountChanged', account)
       this.account = account
-      this.address = account.address
+      this.address = (account.address || '').toLowerCase() || null
     },
     networkChanged: function (network) {
       console.log('networkChanged', network)
@@ -450,11 +450,6 @@ export default {
       this.$nextTick(() => {
         this.$refs.actionInput.$el.scrollIntoView({ behavior: 'smooth', block: 'start' })
       })
-    },
-    slp: async function (ms) {
-      await new Promise(resolve => setTimeout(resolve, ms));
-      console.log(ms * 2)
-      return ms * 10
     },
     performAction: async function (actionInput) {
       console.log('performing', actionInput)
@@ -637,7 +632,6 @@ export default {
       this.signing = true
       if (tokenAddr == ZERO_ADDRESS)
         return
-      const client = getPublicClient()
       const call = {
         address: tokenAddr, abi: [{ "constant": false, "inputs": [{ "name": "_spender", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "approve", "outputs": [], "payable": false, "stateMutability": "nonpayable", "type": "function" }, { "constant": true, "inputs": [], "name": "deprecated", "outputs": [{ "name": "", "type": "bool" }], "payable": false, "stateMutability": "view", "type": "function" }],
         functionName: "approve", args: [CROC_CHAINS[this.chainId].addrs.dex, qty],
@@ -1027,11 +1021,9 @@ export default {
         const gasInETH = formatEther(gasInWei)
 
         if (tipTokens.indexOf(ZERO_ADDRESS) != -1) {
-          let symbol = 'ETH'
-          if ([goerli.id, scrollSepolia.id, arbitrumGoerli.id].includes(this.chainId))
-            symbol = 'gETH'
-          else if (this.chainId == canto.id)
-            symbol = 'CANTO'
+          let symbol = this.chain.chain.nativeCurrency.symbol
+          if (this.chain.chain.testnet)
+            symbol = 'g' + symbol
           tipOptions[ZERO_ADDRESS] = { token: ZERO_ADDRESS, text: `${parseFloat(gasInETH).toFixed(6)} ${symbol}`, amount: gasInWei.toString() }
         }
 
@@ -1142,14 +1134,15 @@ export default {
         throw e
       }
     },
-    getTypedMessageArgs: function (callpath, cmd, conds, tip) {
+    getTypedMessageArgs: function (callpath, cmd, conds, tip, chainId = null) {
+      chainId = chainId || this.chainId
       const domain = {
         name: "CrocSwap",
-        chainId: this.chainId,
-        verifyingContract: CROC_CHAINS[this.chainId].addrs.dex
+        chainId: chainId,
+        verifyingContract: CROC_CHAINS[chainId].addrs.dex
       }
 
-      if ([5].indexOf(this.chainId) == -1)
+      if ([5].indexOf(chainId) == -1)
         domain.version = '1.0'
 
       const types = {
@@ -1235,6 +1228,7 @@ export default {
             const quote = await this.fetchTokenInfo(pos.quote)
             pos._baseDecimals = base.decimals
             pos._quoteDecimals = quote.decimals
+            pos.chainId = Number.parseInt(pos.chainId)
           } catch (e) {
             pos._baseDecimals = 18
             pos._quoteDecimals = 18
@@ -1263,9 +1257,12 @@ export default {
     },
     // fetches and updates pos.qty from the chain
     fetchPositionsLiq: async function (positions) {
-      const client = getPublicClient()
+      if (Object.keys(positions).length == 0)
+        return
+      let chainId = Object.values(positions)[0].chainId || this.chainId
+      const client = getPublicClient({ chainId })
       const qContract = {
-        address: CROC_CHAINS[this.chainId].addrs.query,
+        address: CROC_CHAINS[chainId].addrs.query,
         abi: QUERY_ABI
       }
 
@@ -1294,9 +1291,12 @@ export default {
       }
     },
     fetchPools: async function (positions, ignoreErrors = false) {
-      const client = getPublicClient()
+      if (Object.keys(positions).length == 0)
+        return
+      let chainId = Object.values(positions)[0].chainId || this.chainId
+      const client = getPublicClient({ chainId })
       const qContract = {
-        address: CROC_CHAINS[this.chainId].addrs.query,
+        address: CROC_CHAINS[chainId].addrs.query,
         abi: QUERY_ABI, functionName: "queryPrice",
       }
 
@@ -1324,8 +1324,8 @@ export default {
         pool.priceRaw = price
         const decoded = decodeCrocPrice(price)
         pool.priceDecoded = decoded
-        const baseToken = await this.fetchTokenInfo(pool.base)
-        const quoteToken = await this.fetchTokenInfo(pool.quote)
+        const baseToken = await this.fetchTokenInfo(pool.base, false, chainId)
+        const quoteToken = await this.fetchTokenInfo(pool.quote, false, chainId)
         pool.price = toDisplayPrice(decoded, baseToken.decimals, quoteToken.decimals, true)
         fetchedPools[poolIds[i]] = pool
       }
@@ -1335,20 +1335,22 @@ export default {
       for (const [poolId, pool] of Object.entries(fetchedPools)) {
         this.$set(this.pools, poolId, pool)
       }
-      return fetchedPools
     },
     fetchMissingPool: async function (pos) {
-      pos.user = this.address
+      if (!pos.user)
+        pos.user = this.address
       await this.fetchPools({ p: pos })
       await this.fetchPositionsLiq({ p: pos })
-      pos._baseDecimals = (await this.fetchTokenInfo(pos.base, true)).decimals
-      pos._quoteDecimals = (await this.fetchTokenInfo(pos.quote, true)).decimals
+      let chainId = pos.chainId || this.chainId
+      pos._baseDecimals = (await this.fetchTokenInfo(pos.base, chainId == this.chainId, chainId)).decimals
+      pos._quoteDecimals = (await this.fetchTokenInfo(pos.quote, chainId == this.chainId, chainId)).decimals
       if (pos.qty) {
         if (pos.positionType == 'concentrated')
           pos.slot = concPosSlot(this.address, pos.base, pos.quote, pos.bidTick, pos.askTick, pos.poolIdx).toString()
         else
           pos.slot = ambientPosSlot(this.address, pos.base, pos.quote, pos.poolIdx).toString()
-        this.$set(this.positions, pos.slot, pos)
+        if (pos.user == this.address && chainId == this.chainId)
+          this.$set(this.positions, pos.slot, pos)
       }
     },
     fetchTokens: async function (chainId) {
@@ -1379,30 +1381,31 @@ export default {
     },
     // Catch-all function to get token info out of cache or fetch it from chain.
     // @TODO: it should probably fetch everything (balance, surplus, allowance)
-    fetchTokenInfo: async function (address, fetchSurplus = false) {
+    fetchTokenInfo: async function (address, fetchSurplus = false, chainId = null) {
       if (!address)
         return
+      chainId = chainId || this.chainId
       address = address.toLowerCase()
-      let token = this.TOKENS[this.chainId][address]
+      let token = this.TOKENS[chainId][address]
       if (!token) {
-        token = this.COLD_TOKENS[this.chainId][address]
+        token = this.COLD_TOKENS[chainId][address]
         if (token)
-          this.$set(this.TOKENS[this.chainId], address, token)
+          this.$set(this.TOKENS[chainId], address, token)
       }
       if (!token) {
         console.log('token cache miss', address)
         try {
-          token = await fetchToken({ address, chainId: this.chainId })
+          token = await fetchToken({ address, chainId })
           token.symbolLower = token.symbol.toLowerCase()
           token.nameLower = token.name.toLowerCase()
-          this.$set(this.TOKENS[this.chainId], address, token)
+          this.$set(this.TOKENS[chainId], address, token)
         } catch (e) {
           console.error('token fetch error', e)
           return
         }
       }
       if (fetchSurplus && this.address && this.surpluses[address] == undefined) {
-        this.fetchSurpluses(this.address, [address])
+        this.fetchSurpluses(this.address, [address], chainId)
       }
       return token
     },
@@ -1437,11 +1440,12 @@ export default {
       console.log('allowances', dump(this.allowances))
     },
     // fetches DEX balances either for given tokens, or tokens from the indexer, and optionally adds all current balances to either list
-    fetchSurpluses: async function (owner, tokens = []) {
+    fetchSurpluses: async function (owner, tokens = [], chainId = null) {
+      chainId = chainId || this.chainId
       try {
         if (tokens.length == 0) {
           try {
-            tokens = (await this.graphcache.user_balance_tokens(owner, numberToHex(this.chainId))).tokens
+            tokens = (await this.graphcache.user_balance_tokens(owner, numberToHex(chainId))).tokens
           } catch (e) {
             console.error("user_balance_tokens error")
           }
@@ -1451,23 +1455,24 @@ export default {
             tokens.push(tokenAddr)
         if (tokens.indexOf(ZERO_ADDRESS) == -1)
           tokens.unshift(ZERO_ADDRESS)
-        const someToken = getSomeTokenForChain(this.chainId)
+        const someToken = getSomeTokenForChain(chainId)
         if (tokens.indexOf(someToken) == -1)
           tokens.push(someToken)
         // console.log(owner, tokens)
-        const surpluses = await this.fetchSurplusAmounts(owner, tokens)
+        const surpluses = await this.fetchSurplusAmounts(owner, tokens, chainId)
         console.log('surpluses', surpluses)
         for (const tokenAddr of tokens) {
           try {
             let balance = {}
             let token = { decimals: 18 }
             if (tokenAddr != ZERO_ADDRESS)
-              token = await this.fetchTokenInfo(tokenAddr, false)
+              token = await this.fetchTokenInfo(tokenAddr, false, chainId)
             balance.raw = surpluses[tokenAddr]
             balance.string = formatUnits(balance.raw, token.decimals)
             balance.float = parseFloat(balance.string)
             balance.human = getFormattedNumber(balance.float)
-            this.$set(this.surpluses, tokenAddr, balance)
+            if (chainId == this.chainId && owner == this.address)
+              this.$set(this.surpluses, tokenAddr, balance)
           } catch (e) {
             console.error('surplus fetch error', e)
           }
@@ -1477,10 +1482,11 @@ export default {
       }
       console.log('surpluses', dump(this.surpluses))
     },
-    fetchSurplusAmounts: async function (owner, tokens) {
-      const client = getPublicClient()
+    fetchSurplusAmounts: async function (owner, tokens, chainId = null) {
+      chainId = chainId || this.chainId
+      const client = getPublicClient({ chainId })
       const qContract = {
-        address: CROC_CHAINS[this.chainId].addrs.query,
+        address: CROC_CHAINS[chainId].addrs.query,
         abi: QUERY_ABI
       }
 
@@ -1559,7 +1565,8 @@ export default {
       return swap
     },
     parseTx: async function (origInput) {
-      let txInput = origInput.toLowerCase().match(/0x[0-9a-f]+/)
+      origInput = origInput.toLowerCase()
+      let txInput = origInput.match(/0x[0-9a-f]+/)
       if (!txInput)
         return
       txInput = txInput[0]
@@ -1568,11 +1575,29 @@ export default {
       const result = { success: false, description: "Couldn't parse this transaction", relayer: null }
       let calldata = txInput
       let sender = this.address
+      let chainId = this.chainId
+
+      if (origInput.indexOf('goerli.etherscan') != -1)
+        chainId = goerli.id
+      else if (origInput.indexOf('etherscan') != -1)
+        chainId = mainnet.id
+      else if (origInput.indexOf('sepolia.scrollscan') != -1 || origInput.indexOf('sepolia-blockscout.scroll.io') != -1)
+        chainId = scrollSepolia.id
+      else if (origInput.indexOf('scrollscan') != -1 || origInput.indexOf('scroll.io') != -1)
+        chainId = scroll.id
+      else if (origInput.indexOf('goerli.arbiscan') != -1)
+        chainId = arbitrumGoerli.id
+      else if (origInput.indexOf('arbiscan') != -1)
+        chainId = arbitrum.id
+      else if (origInput.indexOf('tuber.build') != -1 || origInput.indexOf('cantoscan') != -1)
+        chainId = canto.id
+      result.chainId = chainId
+
       if (txInput.length == 66) {
-        const client = getPublicClient()
+        const client = getPublicClient({ chainId })
         try {
           const tx = await client.getTransaction({ hash: txInput })
-          if (!tx.to || tx.to.toLowerCase() != CROC_CHAINS[this.chainId].addrs.dex.toLowerCase()) {
+          if (!tx.to || tx.to.toLowerCase() != CROC_CHAINS[chainId].addrs.dex.toLowerCase()) {
             result.description = "Not an Ambient transaction"
             this.$set(this.parsedTxs, origInput, result)
             return
@@ -1591,22 +1616,31 @@ export default {
 
       try {
         const { functionName, args } = decodeFunctionData({ data: calldata, abi: CROC_ABI })
+        try {
+          if (functionName == 'userCmdRelayer') {
+            result.relayer = await this.describeRelayer(args, chainId)
+            sender = result.relayer.signer
+          }
+        } catch (e) {
+          console.log('describe relayer error', e)
+        }
         if (functionName == 'swap') {
-          result.description = await this.describeSwap(args)
+          result.description = await this.describeSwap(args, chainId)
         } else if (functionName == 'userCmd' || functionName == 'userCmdRelayer') {
-          const { description, position, surplus } = await this.describeUserCmd(args[0], args[1], sender)
+          const { description, position, surplus } = await this.describeUserCmd(args[0], args[1], sender, chainId)
+          position.chainId = chainId
           console.log(description, position, surplus)
           result.description = description
           result.position = position
           result.surplus = surplus
           if (position.base) {
             try {
-              await this.fetchMissingPool(position)
+              await this.fetchMissingPool(position, sender)
             } catch (e) {
               console.log('fetch parsed position failed', e)
             }
           }
-          if (surplus.token) {
+          if (surplus.token && this.address && sender == this.address) {
             try {
               await this.fetchSurpluses(sender, [surplus.token])
             } catch (e) {
@@ -1617,19 +1651,16 @@ export default {
           throw "unsupported"
         }
         result.success = true
-        if (functionName == 'userCmdRelayer') {
-          result.relayer = await this.describeRelayer(args)
-        }
       } catch (e) {
         console.log(e)
       }
       console.log(result)
       this.$set(this.parsedTxs, origInput, result)
     },
-    describeSwap: async function (args) {
+    describeSwap: async function (args, chainId) {
       let description = 'Swap'
-      const base = await this.fetchTokenInfo(args[0])
-      const quote = await this.fetchTokenInfo(args[1])
+      const base = await this.fetchTokenInfo(args[0], false, chainId)
+      const quote = await this.fetchTokenInfo(args[1], false, chainId)
       const reformatted = formatUnits(args[5], args[4] ? base.decimals : quote.decimals)
       const qty = getFormattedNumber(parseFloat(reformatted))
 
@@ -1644,11 +1675,11 @@ export default {
       }
       return description
     },
-    describeUserCmd: async function (callpath, cmd, sender) {
+    describeUserCmd: async function (callpath, cmd, sender, chainId) {
       let description = ""
       let position = { base: null, quote: null, bidTick: null, askTick: null, poolIdx: null, user: sender }
       let surplus = { token: null }
-      if (callpath == CROC_CHAINS[this.chainId].proxyPaths.liq) {
+      if (callpath == CROC_CHAINS[chainId].proxyPaths.liq) {
         const args = decodeAbiParameters([
           { name: 'code', type: 'uint8' },
           { name: 'base', type: 'address' },
@@ -1694,8 +1725,8 @@ export default {
 
         description = `${action}`
         try {
-          const base = await this.fetchTokenInfo(position.base)
-          const quote = await this.fetchTokenInfo(position.quote)
+          const base = await this.fetchTokenInfo(position.base, false, chainId)
+          const quote = await this.fetchTokenInfo(position.quote, false, chainId)
           description = `${description} in ${base.symbol}/${quote.symbol} pool`
 
           if (positionType == 'concentrated') {
@@ -1707,10 +1738,10 @@ export default {
           console.log(e)
         }
 
-      } else if (callpath == CROC_CHAINS[this.chainId].proxyPaths.long) {
+      } else if (callpath == CROC_CHAINS[chainId].proxyPaths.long) {
         description = 'Long form order (possibly repositioning)'
         // @TODO: parse positions here?
-      } else if (callpath == CROC_CHAINS[this.chainId].proxyPaths.cold) {
+      } else if (callpath == CROC_CHAINS[chainId].proxyPaths.cold) {
         const args = decodeAbiParameters(
           [
             { name: 'cmd', type: 'uint8' },
@@ -1725,7 +1756,7 @@ export default {
               { name: 'token', type: 'address' },
             ], cmd)
           const actions = { 73: 'Deposit', 74: 'Withdraw', 75: 'Transfer' }
-          const token = await this.fetchTokenInfo(surplusArgs[3])
+          const token = await this.fetchTokenInfo(surplusArgs[3], false, chainId)
           const reformatted = formatUnits(surplusArgs[2], token.decimals)
           const dest = this.shortHash(surplusArgs[1], '…')
           const qty = getFormattedNumber(parseFloat(reformatted))
@@ -1740,7 +1771,7 @@ export default {
       }
       return { description, position, surplus }
     },
-    describeRelayer: async function (args) {
+    describeRelayer: async function (args, chainId) {
       try {
         const splSig = decodeAbiParameters(
           [
@@ -1750,7 +1781,7 @@ export default {
           ],
           args[4])
         const rawSig = signatureToHex({ v: splSig[0], r: splSig[1], s: splSig[2] })
-        const typedArgs = this.getTypedMessageArgs(args[0], args[1], args[2], args[3])
+        const typedArgs = this.getTypedMessageArgs(args[0], args[1], args[2], args[3], chainId)
         typedArgs.signature = rawSig
         const signer = await recoverTypedDataAddress(typedArgs)
         let tip = '0'
@@ -1763,7 +1794,7 @@ export default {
                 { name: 'recv', type: 'address' },
               ],
               args[3])
-            const token = await this.fetchTokenInfo(tipArgs[0])
+            const token = await this.fetchTokenInfo(tipArgs[0], false, chainId)
             const tipQty = getFormattedNumber(parseFloat(formatUnits(tipArgs[1], token.decimals)))
             tip = `${tipQty} ${token.symbol}`
           }
@@ -1773,7 +1804,7 @@ export default {
         }
         return { signer, tip }
       } catch (e) {
-        throw 'bad relayer'
+        console.log('bad relayer', e)
       }
     },
     relayButtonDisabled: function (scmd) {
@@ -1920,7 +1951,7 @@ export default {
     },
     removeWaitingHash: function (hash) {
       this.$delete(this.waitingHashes, hash)
-      if (Object.keys(this.waitingHashes) == 0) {
+      if (Object.keys(this.waitingHashes).length == 0) {
         this.relaying = false
         this.signing = false
       }
