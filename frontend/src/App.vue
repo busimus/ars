@@ -1410,6 +1410,7 @@ export default {
       return token
     },
     fetchWalletBalance: async function (tokenAddr) {
+      if (!this.address) return
       tokenAddr = tokenAddr.toLowerCase()
       const balanceReq = { address: this.address }
       if (tokenAddr != ZERO_ADDRESS)
@@ -1733,14 +1734,51 @@ export default {
             const rangeMin = getFormattedNumber(parseFloat(toDisplayPrice(tickToPrice(position.askTick), base.decimals, quote.decimals, true)))
             const rangeMax = getFormattedNumber(parseFloat(toDisplayPrice(tickToPrice(position.bidTick), base.decimals, quote.decimals, true)))
             position._range = `${rangeMin} - ${rangeMax}`
+          } else {
+            position._range = 'ambient'
           }
         } catch (e) {
           console.log(e)
         }
 
       } else if (callpath == CROC_CHAINS[chainId].proxyPaths.long) {
-        description = 'Long form order (possibly repositioning)'
-        // @TODO: parse positions here?
+        description = 'Repositining'
+        cmd = cmd.substring(2)
+        console.log(callpath, cmd)
+        try {
+          const openToken = ('0x' + cmd.substring(64 * 1 + (64 - 40), 64 * 1 + 64)).toLowerCase()
+          let closeToken
+          if (cmd.length >= 3264)
+            closeToken = ('0x' + cmd.substring(64 * 45 + (64 - 40), 64 * 45 + 64)).toLowerCase()
+          else
+            closeToken = ('0x' + cmd.substring(64 * 39 + (64 - 40), 64 * 39 + 64)).toLowerCase()
+          position.base = openToken < closeToken ? openToken : closeToken;
+          position.quote = openToken > closeToken ? openToken : closeToken;
+          position.poolIdx = BigInt('0x' + cmd.substring(64 * 26, 64 * 26 + 64))
+          position.bidTick = ~~parseInt(cmd.substring(64 * 31 + (64 - 8), 64 * 31 + 64), 16)
+          position.askTick = ~~parseInt(cmd.substring(64 * 32 + (64 - 8), 64 * 32 + 64), 16)
+          position.positionType = cmd.length >= 3264 ? 'concentrated' : 'ambient' // hacky
+
+          try {
+            const base = await this.fetchTokenInfo(position.base, false, chainId)
+            const quote = await this.fetchTokenInfo(position.quote, false, chainId)
+            description = `${description} in ${base.symbol}/${quote.symbol} pool`
+
+            if (position.positionType == 'concentrated') {
+              const rangeMin = getFormattedNumber(parseFloat(toDisplayPrice(tickToPrice(position.askTick), base.decimals, quote.decimals, true)))
+              const rangeMax = getFormattedNumber(parseFloat(toDisplayPrice(tickToPrice(position.bidTick), base.decimals, quote.decimals, true)))
+              position._range = `${rangeMin} - ${rangeMax}`
+            } else {
+              position._range = 'ambient'
+            }
+          } catch (e) {
+            throw e
+          }
+        } catch (e) {
+          console.log('repositioning parse error', e)
+          description = "Long form order (repositioning parsing error)"
+          position.base = null
+        }
       } else if (callpath == CROC_CHAINS[chainId].proxyPaths.cold) {
         const args = decodeAbiParameters(
           [
