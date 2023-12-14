@@ -14,7 +14,7 @@
     "@esbuild-plugins/node-modules-polyfill": "^0.2.2",
     "@forevolve/bootstrap-dark": "^4.0.0",
     "@sentry/vue": "^7.77.0",
-    "@wagmi/core": "^1.4.5",
+    "@wagmi/core": "^1.4.12",
     "@web3modal/wagmi": "^3.2.0",
     "bootstrap": "^4.6.2",
     "bootstrap-vue": "^2.23.1",
