@@ -23,7 +23,7 @@ const TRANSPORTS = {
   42161: { http: http(`https://arbitrum.llamarpc.com`), tx: http(`https://arbitrum.llamarpc.com`), chain: arbitrum },
   421613: { http: http(`https://rpc.goerli.arbitrum.gateway.fm`), tx: http(`https://rpc.goerli.arbitrum.gateway.fm`), chain: arbitrumGoerli },
   534351: { http: http(`https://sepolia-rpc.scroll.io`), tx: http(`https://sepolia-rpc.scroll.io`), chain: scrollSepolia },
-  534352: { http: http(`https://1rpc.io/scroll`), tx: http(`https://1rpc.io/scroll`), chain: scroll },
+  534352: { http: http(`https://rpc.ankr.com/scroll/${process.env.ANKR_KEY}`), tx: http(`https://rpc.ankr.com/scroll/${process.env.ANKR_KEY}`), chain: scroll },
 }
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
@@ -35,7 +35,7 @@ const RELAY_SPEC = {
     42161: [ZERO_ADDRESS, "0xaf88d065e77c8cc2239327c5edb3a432268e5831", "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f"],
     421613: [ZERO_ADDRESS, "0xc944b73fba33a773a4a07340333a3184a70af1ae", "0x5263e9d82352b8098cc811164c38915812bfc1e3", "0xc52f941486978a25fad837bb701d3025679780e4"],
     534351: [ZERO_ADDRESS, '0x4d65fb724ced0cfc6abfd03231c9cdc2c36a587b'],
-    534352: [ZERO_ADDRESS, "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4"],
+    534352: [ZERO_ADDRESS, "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4", "0xf55bec9cafdbe8730f096aa55dad6d22d44099df"],
   },
   tipRecv: [numberToHex(256, { size: 20 }), '0x09784d03b42581cfc4fc90a7ab11c3125dedeb86', '0xb4fdaf8e6636e7394f6ae768c5fa9d2e5bf6f0dc'],
   tipThreshold: 0.85,  // actual tip must at least cover this amount of gasFee
