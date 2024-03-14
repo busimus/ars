@@ -540,8 +540,10 @@ export default {
     gaslessChanged: function (gaslessEnabled) {
       // since LP removal to surplus balance only makes sense in gasless cases,
       // it'll be a better UX to disable disable surplus when gasless is disabled
-      this.action._baseSurplus = gaslessEnabled
-      this.action._quoteSurplus = gaslessEnabled
+      if (!gaslessEnabled) {
+          this.action._baseSurplus = gaslessEnabled
+          this.action._quoteSurplus = gaslessEnabled
+      }
     },
     refreshSwap: async function () {
       if (this.actionType == 'swap')
