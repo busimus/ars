@@ -4,10 +4,9 @@ import morgan from 'morgan';
 import fs from 'fs';
 
 import { configureChains, createConfig } from '@wagmi/core'
-// import { mainnet, goerli } from '@wagmi/core/chains'
-import { mainnet, goerli, arbitrum, arbitrumGoerli, scroll, scrollSepolia, canto } from 'viem/chains'
+import { mainnet, goerli, sepolia, scroll, scrollSepolia, canto } from 'viem/chains'
 import { publicProvider } from '@wagmi/core/providers/public'
-import { createPublicClient, createWalletClient, decodeAbiParameters, numberToHex, http, hexToBigInt, parseGwei, encodeFunctionData } from 'viem';
+import { createPublicClient, createWalletClient, decodeAbiParameters, numberToHex, http, hexToBigInt, parseGwei, encodeFunctionData, defineChain } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { CROC_CHAINS } from './constants.mjs'
@@ -15,13 +14,72 @@ import { CROC_ABI } from './abis/croc.mjs'
 import { QUERY_ABI } from './abis/query.mjs'
 import { decodeCrocPrice } from './utils.mjs';
 
+const blast = defineChain({
+  id: 81457,
+  name: 'Blast',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'Ether',
+    symbol: 'ETH',
+  },
+  rpcUrls: {
+    public: { http: ['https://rpc.blast.io'] },
+    default: { http: ['https://rpc.blast.io'] },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Blastscan',
+      url: 'https://blastscan.io',
+      apiUrl: 'https://api.blastscan.io/api',
+    },
+  },
+  contracts: {
+    multicall3: {
+      address: '0xcA11bde05977b3631167028862bE2a173976CA11',
+      blockCreated: 212929,
+    },
+  },
+})
+
+export const blastSepolia = defineChain({
+  id: 168_587_773,
+  name: 'Blast Sepolia',
+  nativeCurrency: {
+    name: 'Ether',
+    symbol: 'ETH',
+    decimals: 18,
+  },
+  rpcUrls: {
+    public: {
+      http: ['https://sepolia.blast.io'],
+    },
+    default: {
+      http: ['https://sepolia.blast.io'],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Blastscan',
+      url: 'https://sepolia.blastscan.io',
+      apiUrl: 'https://api-sepolia.blastscan.io/api',
+    },
+  },
+  contracts: {
+    multicall3: {
+      address: '0xca11bde05977b3631167028862be2a173976ca11',
+      blockCreated: 756690,
+    },
+  },
+  testnet: true,
+})
 
 const TRANSPORTS = {
   1: { http: http("https://rpc.flashbots.net/?builder=flashbots&builder=f1b.io&builder=rsync&builder=beaverbuild.org&builder=builder0x69&builder=titan&builder=eigenphi&builder=boba-builder"), tx: http("https://rpc.flashbots.net/?builder=flashbots&builder=f1b.io&builder=rsync&builder=beaverbuild.org&builder=builder0x69&builder=titan&builder=eigenphi&builder=boba-builder"), chain: mainnet },
   5: { http: http(`https://goerli.infura.io/v3/${process.env.INFURA_KEY}`), tx: http(`https://goerli.infura.io/v3/${process.env.INFURA_KEY}`), chain: goerli },
+  11155111: { http: http(`https://rpc.sepolia.org`), tx: http(`https://rpc.sepolia.org`), chain: sepolia },
   7700: { http: http(`https://canto.gravitychain.io`), tx: http(`https://canto.gravitychain.io`), chain: canto },
-  42161: { http: http(`https://arbitrum.llamarpc.com`), tx: http(`https://arbitrum.llamarpc.com`), chain: arbitrum },
-  421613: { http: http(`https://rpc.goerli.arbitrum.gateway.fm`), tx: http(`https://rpc.goerli.arbitrum.gateway.fm`), chain: arbitrumGoerli },
+  81457: { http: http(`https://rpc.blast.io`), tx: http(`https://rpc.blast.io`), chain: blast },
+  168587773: { http: http(`https://sepolia.blast.io`), tx: http(`https://sepolia.blast.io`), chain: blastSepolia },
   534351: { http: http(`https://sepolia-rpc.scroll.io`), tx: http(`https://sepolia-rpc.scroll.io`), chain: scrollSepolia },
   534352: { http: http(`https://rpc.ankr.com/scroll/${process.env.ANKR_KEY}`), tx: http(`https://rpc.ankr.com/scroll/${process.env.ANKR_KEY}`), chain: scroll },
 }
@@ -33,20 +91,21 @@ const RELAY_SPEC = {
     5: [ZERO_ADDRESS, "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", "0xdc31Ee1784292379Fbb2964b3B9C4124D8F89C60", "0xc04b0d3107736c32e19f1c62b2af67be61d63a05"],
     7700: [ZERO_ADDRESS, "0x80b5a32e4f032b2a058b4f29ec95eefeeb87adcd"],
     42161: [ZERO_ADDRESS, "0xaf88d065e77c8cc2239327c5edb3a432268e5831", "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f"],
-    421613: [ZERO_ADDRESS, "0xc944b73fba33a773a4a07340333a3184a70af1ae", "0x5263e9d82352b8098cc811164c38915812bfc1e3", "0xc52f941486978a25fad837bb701d3025679780e4"],
+    81457: ["0x4300000000000000000000000000000000000003", ZERO_ADDRESS],
+    168587773: ["0x4300000000000000000000000000000000000003", ZERO_ADDRESS],
     534351: [ZERO_ADDRESS, '0x4d65fb724ced0cfc6abfd03231c9cdc2c36a587b'],
     534352: [ZERO_ADDRESS, "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4", "0xf55bec9cafdbe8730f096aa55dad6d22d44099df"],
   },
   tipRecv: [numberToHex(256, { size: 20 }), '0x09784d03b42581cfc4fc90a7ab11c3125dedeb86', '0xb4fdaf8e6636e7394f6ae768c5fa9d2e5bf6f0dc'],
   tipThreshold: 0.85,  // actual tip must at least cover this amount of gasFee
-  maxFeePerGasIncrease: { 1: 1.25, 5: 5, 7700: 1, 42161: 1.25, 421613: 5, 534351: 1, 534352: 1 },  // multiplies current gas by this number, based on chainId
+  maxFeePerGasIncrease: { 1: 1.25, 5: 5, 7700: 1.1, 42161: 1.25, 81457: 1.25, 421613: 5, 534351: 1.25, 534352: 1.25, 168587773: 5 },  // multiplies current gas by this number, based on chainId
 }
 
 const ALREADY_SENT = {}
 const TX_STATUSES = {}
 
 const { chains, publicClient, webSocketPublicClient } = configureChains(
-  [mainnet, goerli, arbitrum, arbitrumGoerli, scroll, scrollSepolia],
+  [mainnet, blast, scroll, canto, sepolia, blastSepolia, scrollSepolia, goerli],
   [publicProvider()],
 )
 
@@ -188,7 +247,22 @@ async function isTipEnough(cmd, gasPrice) {
     const client = CLIENTS[cmd.chainId].client
     const l1fee = await client.readContract(call)
     console.log('l1fee', l1fee)
-    gasFee += l1fee * 135n / 100n  // @TODO: figure out why getL1Fee returns lower amounts
+    gasFee += l1fee * 130n / 100n
+  }
+  // l1fee for blast
+  else if ([blast.id, blastSepolia.id].indexOf(cmd.chainId) != -1) {
+    const calldata = encodeFunctionData({
+      functionName: 'userCmdRelayer', args: [cmd.callpath, cmd.cmd, cmd.conds, cmd.tip, cmd.sig], abi: CROC_ABI,
+      // account: this.account
+    })
+    const call = {
+      address: '0x420000000000000000000000000000000000000F', abi: [{ "inputs": [{ "internalType": "bytes", "name": "_data", "type": "bytes" }], "name": "getL1Fee", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }],
+      functionName: "getL1Fee", args: [calldata]
+    }
+    const client = CLIENTS[cmd.chainId].client
+    const l1fee = await client.readContract(call)
+    console.log('l1fee', l1fee)
+    gasFee += l1fee * 115n / 100n
   }
   console.log('gasFee', gasFee, 'ethTip', ethTip)
 
@@ -211,7 +285,7 @@ async function sendRelayerTx(cmd, maxFeePerGas) {
       // account: wallet.account,
       account: ZERO_ADDRESS,
     }
-    if ([mainnet.id, canto.id, goerli.id, arbitrum.id, arbitrumGoerli.id].indexOf(cmd.chainId) != -1) {
+    if ([mainnet.id, canto.id, goerli.id, sepolia.id].indexOf(cmd.chainId) != -1) {
       tx.maxFeePerGas = maxFeePerGas
       tx.maxPriorityFeePerGas = maxFeePerGas < maxPriorityFeePerGas ? maxFeePerGas : maxPriorityFeePerGas
     } else {

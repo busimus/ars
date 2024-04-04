@@ -1,4 +1,4 @@
-import { formatUnits, hexToBigInt } from "viem"
+import { formatUnits, hexToBigInt, encodeAbiParameters, keccak256, encodePacked } from "viem"
 import { getFormattedNumber } from "./number_formatting.jsx"
 import { baseTokenForConcLiq, quoteTokenForConcLiq, floatToBigNum, tickToPrice } from '@crocswap-libs/sdk'
 
@@ -79,8 +79,14 @@ export function getSomeTokenForChain(chainId) {
     return "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
   else if (chainId == 5)
     return "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c"
+  else if (chainId == 11155111)
+    return "0x60bba138a74c5e7326885de5090700626950d509"
   else if (chainId == 7700)
     return "0xee602429ef7ece0a13e4ffe8dbc16e101049504c"
+  else if (chainId == 81457)
+    return "0x4300000000000000000000000000000000000003"
+  else if (chainId == 168587773)
+    return "0x4300000000000000000000000000000000000003"
   else if (chainId == 42161)
     return "0xaf88d065e77c8cc2239327c5edb3a432268e5831"
   else if (chainId == 421613)
@@ -96,3 +102,26 @@ export function getSomeTokenForChain(chainId) {
 export function shortHash(hash, separator = '...', length = 4) {
   return hash.slice(0, 2 + length) + separator + hash.slice(-1 * length);
 }
+
+export function ambientPosSlot(owner, base, quote, poolType) {
+  const poolHash = keccak256(encodeAbiParameters(
+    [{ type: "address" }, { type: "address" }, { type: "uint256" }], [base, quote, poolType]))
+
+  const posKey = keccak256(encodePacked(["address", "bytes32"], [owner, poolHash]))
+  return keccak256(encodePacked(["bytes32", "uint256"],
+    [posKey, AMBIENT_POS_SLOT]))
+}
+
+export function concPosSlot(owner, base, quote,
+  lowerTick, upperTick, poolType) {
+  const poolHash = keccak256(encodeAbiParameters(
+    [{ type: "address" }, { type: "address" }, { type: "uint256" }], [base, quote, poolType]))
+
+  const posKey = keccak256(encodePacked(["address", "bytes32", "int24", "int24"],
+    [owner, poolHash, lowerTick, upperTick]))
+  return keccak256(encodePacked(["bytes32", "uint256"],
+    [posKey, CONC_POS_SLOT]))
+}
+
+const AMBIENT_POS_SLOT = 65550
+const CONC_POS_SLOT = 65549

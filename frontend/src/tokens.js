@@ -227,6 +227,46 @@ export const TOKENS = {
             "logoURI": "https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png"
         },
     },
+    81457: {
+        "0x0000000000000000000000000000000000000000": {
+            "name": "Native Ether",
+            "address": "0x0000000000000000000000000000000000000000",
+            "symbol": "ETH",
+            "nameLower": "native ether",
+            "symbolLower": "eth",
+            "decimals": 18,
+            "logoURI": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/logo.png"
+        },
+        "0x4300000000000000000000000000000000000003": {
+            "name": "USDB",
+            "address": "0x4300000000000000000000000000000000000003",
+            "symbol": "USDB",
+            "nameLower": "usdb",
+            "symbolLower": "usdb",
+            "decimals": 18,
+            "logoURI": "https://assets.coingecko.com/coins/images/35595/large/65c67f0ebf2f6a1bd0feb13c_usdb-icon-yellow.png"
+        },
+    },
+    168587773: {
+        "0x0000000000000000000000000000000000000000": {
+            "name": "Native Ether",
+            "address": "0x0000000000000000000000000000000000000000",
+            "symbol": "ETH",
+            "nameLower": "native ether",
+            "symbolLower": "eth",
+            "decimals": 18,
+            "logoURI": "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/logo.png"
+        },
+        "0x4300000000000000000000000000000000000003": {
+            "name": "USDB",
+            "address": "0x4300000000000000000000000000000000000003",
+            "symbol": "USDB",
+            "nameLower": "usdb",
+            "symbolLower": "usdb",
+            "decimals": 18,
+            "logoURI": "https://assets.coingecko.com/coins/images/35595/large/65c67f0ebf2f6a1bd0feb13c_usdb-icon-yellow.png"
+        },
+    },
     534352: {
         "0x0000000000000000000000000000000000000000": {
             "name": "Native Ether",

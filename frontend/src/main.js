@@ -15,6 +15,7 @@ Vue.use(VBHoverPlugin)
 
 import * as Sentry from "@sentry/vue";
 Sentry.init({
+  enabled: false,
   Vue,
   dsn: "https://aa5166250d64b1f75ef3859089fef95d@o4505626674855936.ingest.sentry.io/4505626676101121",
   tunnel: "https://ars.bus.bz/sen",

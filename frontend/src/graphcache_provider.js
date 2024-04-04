@@ -1,6 +1,6 @@
 export const GRAPHCACHE_PROVIDERS = [
   // { name: "bus's indexer", url: 'https://ambindexer.bus.bz/gcgo/' }, // it's like >2M RPC requests per day wtf
-  { name: 'Official', urls: { 1: 'https://ambindexer.net/gcgo/', 5: 'https://ambindexer.net/gcgo/', 5: 'https://ambindexer.net/gcgo/', 7700: 'https://ambient.plexnode.wtf/gcgo/', 42161: 'https://ambindexer.net/gcgo/', 421613: 'https://ambindexer.net/scroll-gcgo/', 534351: 'https://ambindexer.net/scroll-gcgo/', 534352: 'https://ambindexer.net/scroll-gcgo/' } } // @TODO: arbitrum
+  { name: 'Official', urls: { 1: 'https://ambindexer.net/gcgo/', 5: 'https://ambindexer.net/gcgo/', 11155111: 'https://ambindexer.net/gcgo-testnet/', 7700: 'https://ambient.plexnode.wtf/gcgo/', 42161: 'https://ambindexer.net/gcgo/', 81457: 'https://ambindexer.net/blast-gcgo/', 421613: 'https://ambindexer.net/scroll-gcgo/', 534351: 'https://ambindexer.net/gcgo/', 534352: 'https://ambindexer.net/scroll-gcgo/', 168587773: 'https://ambindexer.net/gcgo-testnet/'} }
 ]
 
 

@@ -222,9 +222,67 @@ import {
 
 import { createWeb3Modal, defaultWagmiConfig } from '@web3modal/wagmi'
 import { configureChains, createConfig, getPublicClient, getWalletClient, fetchToken, fetchBalance } from '@wagmi/core'
-import { mainnet, arbitrum, scroll, canto, goerli, arbitrumGoerli, scrollSepolia } from '@wagmi/core/chains'
+import { mainnet, scroll, canto, goerli, sepolia, scrollSepolia } from '@wagmi/core/chains'
+const blast = defineChain({
+  id: 81457,
+  name: 'Blast',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'Ether',
+    symbol: 'ETH',
+  },
+  rpcUrls: {
+    public: { http: ['https://rpc.blast.io'] },
+    default: { http: ['https://rpc.blast.io'] },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Blastscan',
+      url: 'https://blastscan.io',
+      apiUrl: 'https://api.blastscan.io/api',
+    },
+  },
+  contracts: {
+    multicall3: {
+      address: '0xcA11bde05977b3631167028862bE2a173976CA11',
+      blockCreated: 212929,
+    },
+  },
+})
 
-const chains = [mainnet, scroll, canto, goerli, arbitrumGoerli, scrollSepolia]
+export const blastSepolia = defineChain({
+  id: 168_587_773,
+  name: 'Blast Sepolia',
+  nativeCurrency: {
+    name: 'Ether',
+    symbol: 'ETH',
+    decimals: 18,
+  },
+  rpcUrls: {
+    public: {
+      http: ['https://sepolia.blast.io'],
+    },
+    default: {
+      http: ['https://sepolia.blast.io'],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Blastscan',
+      url: 'https://sepolia.blastscan.io',
+      apiUrl: 'https://api-sepolia.blastscan.io/api',
+    },
+  },
+  contracts: {
+    multicall3: {
+      address: '0xca11bde05977b3631167028862be2a173976ca11',
+      blockCreated: 756690,
+    },
+  },
+  testnet: true,
+})
+
+const chains = [mainnet, blast, scroll, canto, scrollSepolia, blastSepolia, sepolia, goerli, ]
 const projectId = '8978c906351c8a4e3eccd85a700306ab'
 
 const wagmiConfig = defaultWagmiConfig({
@@ -242,20 +300,23 @@ const wagmiConfig = defaultWagmiConfig({
 import chain1 from './assets/chains/1.webp'
 import chain5 from './assets/chains/5.webp'
 import chain7700 from './assets/chains/7700.webp'
+import chain81457 from './assets/chains/81457.webp'
 import chain42161 from './assets/chains/42161.webp'
 import chain421613 from './assets/chains/421613.webp'
 import chain534351 from './assets/chains/534351.webp'
 import chain534352 from './assets/chains/534352.webp'
+import chain168587773 from './assets/chains/168587773.webp'
 
 const chainImages = {
   1: chain1,
   5: chain5,
   7700: chain7700,
+  81457: chain81457,
   42161: chain42161,
   421613: chain421613,
   534351: chain534351,
   534352: chain534352,
-
+  168587773: chain168587773,
 }
 
 const web3modal = createWeb3Modal({
@@ -264,12 +325,12 @@ const web3modal = createWeb3Modal({
 })
 
 import { ethers, BigNumber } from "ethers";
-import { ambientPosSlot, concPosSlot, roundForConcLiq, tickToPrice } from '@crocswap-libs/sdk'
+import { roundForConcLiq, tickToPrice } from '@crocswap-libs/sdk'
 import cloneDeep from 'lodash.clonedeep'
 import * as Sentry from "@sentry/browser";
 
 import { watchAccount, watchNetwork, signTypedData } from '@wagmi/core'
-import { encodeAbiParameters, toHex, numberToHex, hexToBigInt, formatUnits, formatEther, UserRejectedRequestError, parseUnits, parseEther, encodeFunctionData, decodeFunctionData, decodeAbiParameters, recoverTypedDataAddress, signatureToHex } from 'viem'
+import { encodeAbiParameters, toHex, numberToHex, hexToBigInt, formatUnits, formatEther, UserRejectedRequestError, parseUnits, parseEther, encodeFunctionData, decodeFunctionData, decodeAbiParameters, recoverTypedDataAddress, signatureToHex, defineChain } from 'viem'
 import { normalize } from 'viem/ens'
 import { signERC2612Permit } from './permit.jsx'
 
@@ -277,11 +338,12 @@ import ExchangePositions from './components/ExchangePositions.vue'
 import ActionInput from './components/ActionInput.vue'
 import { GraphcacheProvider, GRAPHCACHE_PROVIDERS } from './graphcache_provider.js'
 import { getFormattedNumber } from './number_formatting.jsx'
-import { lpBaseTokens, lpQuoteTokens, getSomeTokenForChain } from './utils.jsx'
+import { lpBaseTokens, lpQuoteTokens, getSomeTokenForChain, concPosSlot, ambientPosSlot } from './utils.jsx'
 import { CROC_CHAINS } from './constants.js'
 import { CROC_ABI } from './abis/croc.js'
 import { QUERY_ABI } from './abis/query.js'
 import { IMPACT_ABI } from './abis/impact.js'
+import { MULTICALL_ABI } from './abis/multicall3.js'
 import { COMMANDS, SETTLE_TO_DEX, BASE_TO_DEX, QUOTE_TO_DEX } from './dex_actions.jsx'
 import { TOKENS } from './tokens.js'
 import { OrderDirective } from './longform.jsx'
@@ -295,11 +357,14 @@ const RELAYERS = {
     acceptedTipTokens: {
       1: ["0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", ZERO_ADDRESS, "0xdac17f958d2ee523a2206206994597c13d831ec7", "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", "0x6b175474e89094c44da98b954eedeac495271d0f"],
       5: ["0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c", ZERO_ADDRESS, "0xdc31Ee1784292379Fbb2964b3B9C4124D8F89C60", "0xc04b0d3107736c32e19f1c62b2af67be61d63a05"],
+      11155111: ["0x60bba138a74c5e7326885de5090700626950d509", ZERO_ADDRESS, "0xca97cc9c1a1dfa54a252daafe9b5cd1e16c81328"],
       7700: ["0x80b5a32e4f032b2a058b4f29ec95eefeeb87adcd", ZERO_ADDRESS],
+      81457: ["0x4300000000000000000000000000000000000003", ZERO_ADDRESS],
       42161: ["0xaf88d065e77c8cc2239327c5edb3a432268e5831", ZERO_ADDRESS, "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f"],
       421613: ["0xc944b73fba33a773a4a07340333a3184a70af1ae", ZERO_ADDRESS, "0x5263e9d82352b8098cc811164c38915812bfc1e3", "0xc52f941486978a25fad837bb701d3025679780e4"],
       534351: ['0x4d65fb724ced0cfc6abfd03231c9cdc2c36a587b', ZERO_ADDRESS],
       534352: ["0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4", "0xf55bec9cafdbe8730f096aa55dad6d22d44099df", ZERO_ADDRESS],
+      168587773: [ZERO_ADDRESS]
     }
   }
 }
@@ -371,7 +436,7 @@ export default {
       shortHash,
       CHAINS: CROC_CHAINS,
       CHAIN_IMAGES: chainImages,
-      COLD_TOKENS: { 1: {}, 5: {}, 7700: {}, 42161: {}, 421613: {}, 534351: {}, 534352: {} },
+      COLD_TOKENS: { 1: {}, 5: {}, 7700: {}, 42161: {}, 81457: {}, 421613: {}, 534351: {}, 534352: {} },
 
       ethBalance: '',
       ensName: null,
@@ -459,7 +524,7 @@ export default {
       let cmd = null
       try {
         if (action._type == 'withdraw') {
-          cmd = this.buildWithdrawSurplusCmd(action, true)
+          cmd = await this.buildWithdrawSurplusCmd(action, true)
         } else if (action._type == 'transfer') {
           cmd = this.buildWithdrawSurplusCmd(action, false)
         } else if (action._type == 'removeConcLp') {
@@ -545,7 +610,7 @@ export default {
 
       console.log('opening hop', action._toToken)
       const hop = order.appendHop(action._toToken)
-      hop.settlement.useSurplus = true
+      hop.settlement.useSurplus = false
       const pool = order.appendPool(a.poolIdx)
       pool.swap.isBuy = a.isBuy
       pool.swap.inBaseQty = a.inBaseQty
@@ -621,6 +686,45 @@ export default {
       )
       return { callpath, cmd, _action: action }
     },
+    buildMintLimitCmd: function (action) {
+      const a = action
+      const callpath = 7
+      const limitArgs = encodeAbiParameters(
+        [
+          { name: 'qty', type: 'uint128' },
+          { name: 'insideMid', type: 'bool' },
+        ],
+        [a._qtyRaw, false]
+      )
+      const cmd = encodeAbiParameters(
+        [
+          { name: 'code', type: 'uint8' },
+          { name: 'base', type: 'address' },
+          { name: 'quote', type: 'address' },
+          { name: 'poolIdx', type: 'uint256' },
+          { name: 'lowTick', type: 'int24' },
+          { name: 'highTick', type: 'int24' },
+          { name: 'isBid', type: 'bool' },
+          { name: 'settleFlags', type: 'uint8' },
+          { name: 'args', type: 'bytes' },
+        ],
+        [91, a.base, a.quote, a.poolIdx, a.lowTick, a.highTick, a.isBid,
+          a.settleFlags, limitArgs]
+      )
+      return { callpath, cmd, _action: action, value: action.isBid && action.base == ZERO_ADDRESS ? action._qtyRaw : 0n }
+    },
+    multiLimitMint: async function (action) {
+      // const action1 = { base: "0x0000000000000000000000000000000000000000", quote: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", poolIdx: 420n, lowTick: 0x2fea0, highTick: 0x2feb0, isBid: true, _qtyRaw: 4000000000000n, settleFlags: 4 }
+      // const cmd1 = this.buildMintLimitCmd(action1)
+      // const action2 = { base: "0x0000000000000000000000000000000000000000", quote: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", poolIdx: 420n, lowTick: 0x2eea0, highTick: 0x2eea4, isBid: true, _qtyRaw: 4000000000000n, settleFlags: 4 }
+      // const cmd2 = this.buildMintLimitCmd(action2)
+      const action1 = {base: "0x0000000000000000000000000000000000000000", quote: "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4", poolIdx: 420n, lowTick: 0x30e74, highTick: 0x30e78, isBid: false, _qtyRaw: 1000000n, settleFlags: 0}
+      const cmd1 = this.buildMintLimitCmd(action1)
+      const action2 = {base: "0x0000000000000000000000000000000000000000", quote: "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4", poolIdx: 420n, lowTick: 0x31e74, highTick: 0x31e78, isBid: false, _qtyRaw: 1000000n, settleFlags: 0}
+      const cmd2 = this.buildMintLimitCmd(action2)
+      await this.sendMultiUserCmd([cmd1, cmd2])
+      return cmd2
+    },
     getDepositPermit: async function (action) {
       const wallet = await getWalletClient({ chainId: this.chainId })
       const client = getPublicClient()
@@ -686,7 +790,7 @@ export default {
       )
       return { callpath, cmd, _action: action }
     },
-    signCmd: async function (cmd) {
+    signCmd: async function (cmd, noTips=false) {
       console.log('signCmd', cmd)
       try {
         const nonce = 0
@@ -742,7 +846,7 @@ export default {
         }
         console.log('signedCmd', signedCmd)
         try {
-          if (cmd._action._selectedTipToken == null)
+          if (cmd._action._selectedTipToken == null && !noTips)
             await this.estimateTips(signedCmd)
           const sim = await this.sendRelayerTx(signedCmd, true)
         } catch (e) {
@@ -754,6 +858,41 @@ export default {
       } catch (e) {
         // console.error('signCmd exception', e)
         // this.showToast('Signing exception', e.toString(), 'danger')
+        throw e
+      }
+    },
+    sendMultiUserCmd: async function (cmds) {
+      console.log('sendMultiUserCmdTx', cmds)
+      let calls = []
+      let totalValue = 0n
+      // cmds = [cmds[0]]
+      for (const cmd of cmds) {
+        const scmd = await this.signCmd(cmd, true)
+        const encodedCmd = encodeFunctionData({
+          functionName: 'userCmdRelayer', args: [scmd.callpath, scmd.cmd, scmd.conds, scmd.tip, scmd.sig], value: cmd.value,
+          address: CROC_CHAINS[this.chainId].addrs.dex, abi: CROC_ABI
+        })
+        calls.push({
+          target: CROC_CHAINS[this.chainId].addrs.dex,
+          allowFailure: false, // @TODO: configurable?
+          value: cmd.value,
+          callData: encodedCmd
+        })
+        totalValue += cmd.value
+      }
+      try {
+        const client = getPublicClient()
+        const sim = await client.simulateContract({
+          functionName: 'aggregate3Value', args: [calls], value: totalValue,
+          address: CROC_CHAINS[this.chainId].addrs.multicall3, abi: MULTICALL_ABI,
+          account: this.account
+        })
+        console.log('sim', sim)
+        const wallet = await getWalletClient({ chainId: this.chainId })
+        return await wallet.writeContract(sim.request)
+      } catch (e) {
+        console.error('sendUserTx error', e)
+        // this.showToast('Send TX error', e.toString(), 'danger')
         throw e
       }
     },
@@ -830,7 +969,6 @@ export default {
           const clonedScmd = cloneDeep(scmd)
           clonedScmd._action.tip = { token: tipToken, amount: scmd._action._tipEstimates[tipToken].amount }
           console.log("relaying!", dump(clonedScmd))
-          console.lo
           try {
             this.ensureBalance(clonedScmd)
           } catch (e) {
@@ -1119,13 +1257,24 @@ export default {
           const calldata = encodeFunctionData({
             functionName: 'userCmdRelayer', args: [cmd.callpath, cmd.cmd, cmd.conds, cmd.tip, cmd.sig], abi: CROC_ABI,
           })
-          // this seems to give noticeably lower values than what actually gets credited onchain?
-          // idk, bump it 35%
+          // lower because it doesn't have a tip. just bump it 30% for now, will fix it later
           const call = {
             address: '0x5300000000000000000000000000000000000002', abi: [{ "inputs": [{ "internalType": "bytes", "name": "_data", "type": "bytes" }], "name": "getL1Fee", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }],
             functionName: "getL1Fee", args: [calldata]
           }
-          additionalFee = (await client.readContract(call)) * 135n / 100n
+          additionalFee = (await client.readContract(call)) * 120n / 100n
+        }
+        // L1 fee for scroll
+        else if ([blast.id, blastSepolia.id].indexOf(this.chainId) != -1) {
+          const calldata = encodeFunctionData({
+            functionName: 'userCmdRelayer', args: [cmd.callpath, cmd.cmd, cmd.conds, cmd.tip, cmd.sig], abi: CROC_ABI,
+          })
+          // lower because it doesn't have a tip. just bump it 30% for now, will fix it later
+          const call = {
+            address: '0x420000000000000000000000000000000000000F', abi: [{ "inputs": [{ "internalType": "bytes", "name": "_data", "type": "bytes" }], "name": "getL1Fee", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }],
+            functionName: "getL1Fee", args: [calldata]
+          }
+          additionalFee = (await client.readContract(call)) * 130n / 100n
         }
         console.log('gas', gas, additionalFee)
         return { gas, additionalFee }
@@ -1179,10 +1328,12 @@ export default {
       const walletTokens = Object.keys(this.allowances)
       if (walletTokens.indexOf(ZERO_ADDRESS) == -1)
         walletTokens.unshift(ZERO_ADDRESS)
-      if (this.chainId == 1 && walletTokens.indexOf("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") == -1)
+      if (this.chainId == mainnet.id && walletTokens.indexOf("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") == -1)
         walletTokens.push("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
-      if (this.chainId == 5 && walletTokens.indexOf("0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c") == -1)
+      if (this.chainId == goerli.id && walletTokens.indexOf("0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c") == -1)
         walletTokens.push("0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c")
+      if (this.chainId == blast.id && walletTokens.indexOf("0x4300000000000000000000000000000000000003") == -1)
+        walletTokens.push("0x4300000000000000000000000000000000000003")
       // i'm tired of writing multicalls, let batching do the work for once
       for (const token of walletTokens)
         refreshables.push(this.fetchWalletBalance(token)) // will fetch allowance too
@@ -1580,6 +1731,8 @@ export default {
 
       if (origInput.indexOf('goerli.etherscan') != -1)
         chainId = goerli.id
+      else if (origInput.indexOf('sepolia.etherscan') != -1)
+        chainId = sepolia.id
       else if (origInput.indexOf('etherscan') != -1)
         chainId = mainnet.id
       else if (origInput.indexOf('sepolia.scrollscan') != -1 || origInput.indexOf('sepolia-blockscout.scroll.io') != -1)
@@ -1592,6 +1745,10 @@ export default {
         chainId = arbitrum.id
       else if (origInput.indexOf('tuber.build') != -1 || origInput.indexOf('cantoscan') != -1)
         chainId = canto.id
+      else if (origInput.indexOf('testnet.blastscan.io') != -1)
+        chainId = blastSepolia.id
+      else if (origInput.indexOf('blastscan.io') != -1)
+        chainId = blast.id
       result.chainId = chainId
 
       if (txInput.length == 66) {

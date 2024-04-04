@@ -1,40 +1,3 @@
-const GOERLI_CHAIN = {
-  addrs: {
-    dex: "0xfafcd1f5530827e7398b6d3c509f450b1b24a209",
-    query: "0xc9900777baa5EE94Cd2C6509fb09278A1A46b7e8",
-    impact: "0x142BE02F2A3A27ecD6e2f18a43c2C234F372C831"
-  },
-  poolIndex: 36000,
-  isTestNet: true,
-  chainId: "0x5",
-  gridSize: 64,
-  proxyPaths: {
-    cold: 0,
-    long: 4,
-    liq: 2
-  },
-  blockExplorer: "https://goerli.etherscan.io/",
-  usdc: "0xd87ba7a50b2e7e660f678a895e4b72e7cb4ccd9c",
-};
-
-const ARB_GOERLI_CHAIN = {
-  addrs: {
-    dex: "0x5D42d6046927DEE12b9b4a235be0ceCd55D0E0fb",
-    query: "0x3A6E9cff691a473D4D0742E1dFc8Ea263a99F6d0",
-    impact: "0xf19D3dcdF82af0d40Cb3b4AaE4D266c638A3E454"
-  },
-  poolIndex: 36000,
-  isTestNet: true,
-  chainId: "0x66eed",
-  gridSize: 16,
-  proxyPaths: {
-    cold: 3,
-    long: 4,
-    liq: 2
-  },
-  blockExplorer: "https://goerli.arbiscan.io/",
-};
-
 const MAINNET_CHAIN = {
   addrs: {
     dex: "0xAaAaAAAaA24eEeb8d57D431224f73832bC34f688",
@@ -110,11 +73,56 @@ const CANTO_CHAIN = {
   geckoChainString: "canto"
 }
 
+const BLAST_CHAIN = {
+  nodeUrl: "https://rpc.ankr.com/blast",
+  addrs: {
+    dex: "0xaAaaaAAAFfe404EE9433EEf0094b6382D81fb958",
+    query: "0xA3BD3bE19012De72190c885FB270beb93e36a8A7",
+    impact: "0x6A699AB45ADce02891E6115b81Dfb46CAa5efDb9",
+    router: "0xaab17419F062bB28CdBE82f9FC05E7C47C3F6194",
+    routerBypass: "0xd83eF4d0e968A96329aC297bBf049CDdaC7E0362"
+  },
+  poolIndex: 420,
+  chainId: "0x13e31",
+  gridSize: 4,
+  proxyPaths: {
+    cold: 3,
+    long: 130,
+    liq: 128,
+    dfltColdSwap: true
+  },
+  blockExplorer: "https://blastscan.io/",
+  geckoChainString: "blast"
+};
+
+const BLAST_SEPOLIA_CHAIN = {
+  nodeUrl: "https://sepolia.blast.io",
+  addrs: {
+    dex: "0xf65976C7f25b6320c7CD81b1db10cEe97F2bb7AC",
+    query: "0x7757BAEC9c492691eAE235c6f01FB99AaA622975",
+    impact: "0x5D42d6046927DEE12b9b4a235be0ceCd55D0E0fb",
+    router: "0xdCB3b5ec9170beF68E9fff21F0EDD622F72f1899",
+    routerBypass: "0x3A6E9cff691a473D4D0742E1dFc8Ea263a99F6d0"
+  },
+  poolIndex: 36000,
+  isTestNet: true,
+  chainId: "0xa0c71fd",
+  gridSize: 1,
+  proxyPaths: {
+    cold: 3,
+    long: 130,
+    liq: 128,
+    dfltColdSwap: true
+  },
+  blockExplorer: "https://testnet.blastscan.io/",
+  displayName: "Blast Sepolia",
+};
+
 export const CROC_CHAINS = {
   1: MAINNET_CHAIN,
-  5: GOERLI_CHAIN,
+  81457: BLAST_CHAIN,
   7700: CANTO_CHAIN,
-  421613: ARB_GOERLI_CHAIN,
   534351: SCROLL_SEPOLIA_CHAIN,
   534352: SCROLL_CHAIN,
+  168587773: BLAST_SEPOLIA_CHAIN,
 }
