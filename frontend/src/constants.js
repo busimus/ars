@@ -74,7 +74,7 @@ const ARB_CHAIN = {
 
 const SCROLL_CHAIN = {
   addrs: {
-    dex: "0xAaAaAAAaA24eEeb8d57D431224f73832bC34f688",
+    dex: "0xaaaaaaaacb71bf2c8cae522ea5fa455571a74106",
     query: "0x62223e90605845cf5cc6dae6e0de4cda130d6ddf",
     impact: "0xc2c301759b5e0c385a38e678014868a33e2f3ae3",
     multicall3: "0xca11bde05977b3631167028862be2a173976ca11"

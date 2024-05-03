@@ -282,7 +282,7 @@ export const blastSepolia = defineChain({
   testnet: true,
 })
 
-const chains = [mainnet, blast, scroll, canto, scrollSepolia, blastSepolia, sepolia, goerli, ]
+const chains = [mainnet, blast, scroll, canto, sepolia, blastSepolia, scrollSepolia, goerli ]
 const projectId = '8978c906351c8a4e3eccd85a700306ab'
 
 const wagmiConfig = defaultWagmiConfig({
@@ -305,6 +305,7 @@ import chain42161 from './assets/chains/42161.webp'
 import chain421613 from './assets/chains/421613.webp'
 import chain534351 from './assets/chains/534351.webp'
 import chain534352 from './assets/chains/534352.webp'
+import chain11155111 from './assets/chains/11155111.webp'
 import chain168587773 from './assets/chains/168587773.webp'
 
 const chainImages = {
@@ -316,6 +317,7 @@ const chainImages = {
   421613: chain421613,
   534351: chain534351,
   534352: chain534352,
+  11155111: chain11155111,
   168587773: chain168587773,
 }
 
@@ -436,7 +438,7 @@ export default {
       shortHash,
       CHAINS: CROC_CHAINS,
       CHAIN_IMAGES: chainImages,
-      COLD_TOKENS: { 1: {}, 5: {}, 7700: {}, 42161: {}, 81457: {}, 421613: {}, 534351: {}, 534352: {} },
+      COLD_TOKENS: { 1: {}, 5: {}, 7700: {}, 42161: {}, 81457: {}, 421613: {}, 534351: {}, 534352: {}, 168587773: {}, 11155111: {} },
 
       ethBalance: '',
       ensName: null,
@@ -2095,17 +2097,16 @@ export default {
         return
       }
       const client = getPublicClient()
-      let [ensName, balance] = await Promise.allSettled([client.getEnsName({ address: this.address }), client.getBalance({ address: this.address })]);
+      const ensClient = getPublicClient({chainId: '0x1'})
+      let [ensName, balance] = await Promise.allSettled([ensClient.getEnsName({ address: this.address }), client.getBalance({ address: this.address })]);
 
       let symbol = this.chain.chain.nativeCurrency.symbol
-      if (this.chain.chain.testnet)
-        symbol = 'g' + symbol
       if (balance.status == 'fulfilled')
         this.ethBalance = `${getFormattedNumber(parseFloat(formatEther(balance.value)))} ${symbol}`
       if (ensName.status == 'fulfilled')
         this.ensName = ensName.value
       if (this.ensName && !this.ensAvatar)
-        this.ensAvatar = await client.getEnsAvatar({ name: normalize(this.ensName) })
+        this.ensAvatar = await ensClient.getEnsAvatar({ name: normalize(this.ensName) })
     },
     switchToChain: async function (id) {
       const wallet = await getWalletClient({ chainId: this.chainId })
