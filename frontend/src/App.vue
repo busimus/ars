@@ -100,7 +100,7 @@
         <ActionInput class="main-panel border shadow-sm rounded" style="height: auto; width: inherit" ref="actionInput"
           @perform="performAction" @fetchToken="a => fetchTokenInfo(a, true)"
           @fetchWalletBalance="a => fetchWalletBalance(a)" @approve="sendApproveTx"
-          @fetchPool="pos => fetchMissingPool(pos)" @parseTx="parseTx" :fetchSwapOutput="fetchSwapOutput" :pools="pools"
+          @fetchPool="pos => fetchMissingPool(pos, true)" @parseTx="parseTx" :fetchSwapOutput="fetchSwapOutput" :pools="pools"
           :tokens="TOKENS[chainId]" :coldTokens="COLD_TOKENS[chainId]" :surpluses="surpluses"
           :walletBalances="walletBalances" :allowances="allowances" :parsedTxs="parsedTxs" :address="address"
           :signing="signing" :canSign="canSign" :crocChain="CHAINS[chainId]" />
@@ -1490,7 +1490,7 @@ export default {
         this.$set(this.pools, poolId, pool)
       }
     },
-    fetchMissingPool: async function (inPos) {
+    fetchMissingPool: async function (inPos, setRemoveAction=false) {
       console.log('inPos', inPos)
       await this.fetchPools({p: inPos})
       if (!inPos.user)
@@ -1512,6 +1512,8 @@ export default {
             pos.slot = ambientPosSlot(this.address, pos.base, pos.quote, pos.poolIdx).toString()
           if (pos.user == this.address && chainId == this.chainId)
             this.$set(this.positions, pos.slot, pos)
+          if (setRemoveAction)
+            this.setRemoveLp(pos.slot)
         }
       }
     },
@@ -1804,7 +1806,7 @@ export default {
           result.surplus = surplus
           if (position.base) {
             try {
-              await this.fetchMissingPool(position, sender)
+              await this.fetchMissingPool(position, false)
             } catch (e) {
               console.log('fetch parsed position failed', e)
             }
