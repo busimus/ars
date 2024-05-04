@@ -198,6 +198,7 @@ import {
   poolKey,
   dump,
   shortHash,
+  genSimilarPositions
 } from "./utils.jsx";
 import {
   BAvatar,
@@ -1489,21 +1490,29 @@ export default {
         this.$set(this.pools, poolId, pool)
       }
     },
-    fetchMissingPool: async function (pos) {
-      if (!pos.user)
-        pos.user = this.address
-      await this.fetchPools({ p: pos })
-      await this.fetchPositionsLiq({ p: pos })
-      let chainId = pos.chainId || this.chainId
-      pos._baseDecimals = (await this.fetchTokenInfo(pos.base, chainId == this.chainId, chainId)).decimals
-      pos._quoteDecimals = (await this.fetchTokenInfo(pos.quote, chainId == this.chainId, chainId)).decimals
-      if (pos.qty) {
-        if (pos.positionType == 'concentrated')
-          pos.slot = concPosSlot(this.address, pos.base, pos.quote, pos.bidTick, pos.askTick, pos.poolIdx).toString()
-        else
-          pos.slot = ambientPosSlot(this.address, pos.base, pos.quote, pos.poolIdx).toString()
-        if (pos.user == this.address && chainId == this.chainId)
-          this.$set(this.positions, pos.slot, pos)
+    fetchMissingPool: async function (inPos) {
+      console.log('inPos', inPos)
+      await this.fetchPools({p: inPos})
+      if (!inPos.user)
+        inPos.user = this.address
+      if (inPos.positionType == 'concentrated' && (inPos.bidTick === null || inPos.askTick === null))
+        return
+      const possiblePositions = genSimilarPositions(inPos)
+      console.log("possible positions", possiblePositions)
+      await this.fetchPools(possiblePositions)
+      await this.fetchPositionsLiq(possiblePositions)
+      let chainId = inPos.chainId || this.chainId
+      for (const pos of Object.values(possiblePositions)) {
+        pos._baseDecimals = (await this.fetchTokenInfo(pos.base, chainId == this.chainId, chainId)).decimals
+        pos._quoteDecimals = (await this.fetchTokenInfo(pos.quote, chainId == this.chainId, chainId)).decimals
+        if (pos.qty) {
+          if (pos.positionType == 'concentrated')
+            pos.slot = concPosSlot(this.address, pos.base, pos.quote, pos.bidTick, pos.askTick, pos.poolIdx).toString()
+          else
+            pos.slot = ambientPosSlot(this.address, pos.base, pos.quote, pos.poolIdx).toString()
+          if (pos.user == this.address && chainId == this.chainId)
+            this.$set(this.positions, pos.slot, pos)
+        }
       }
     },
     fetchTokens: async function (chainId) {

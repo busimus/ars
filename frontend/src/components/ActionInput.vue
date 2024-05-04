@@ -288,14 +288,11 @@ import {
   BFormSelect,
   BFormCheckbox,
   BFormTextarea,
-  BFormInvalidFeedback,
-  BIconArrowClockwise,
   BIconArrowDownShort,
   BIconChevronDown,
   BIconChevronUp,
   BIconQuestionCircle,
   BIconArrowDownUp,
-  BIconArrowBarUp,
   BIconWallet2,
   BButton,
   BModal,
@@ -337,15 +334,11 @@ export default {
     BFormSelect,
     BFormCheckbox,
     BFormTextarea,
-    BFormInvalidFeedback,
-    BFormInvalidFeedback,
-    BIconArrowClockwise,
     BIconArrowDownUp,
     BIconArrowDownShort,
     BIconChevronDown,
     BIconChevronUp,
     BIconQuestionCircle,
-    BIconArrowBarUp,
     BIconWallet2,
     BButton,
     BModal,
@@ -767,6 +760,7 @@ export default {
         if ((a._fromToken && this.surpluses[a._fromToken] && a._fromQtyRaw > this.surpluses[a._fromToken].raw) || (!a._estimate || (a._estimate && a._estimate.stale)))
           return true
       }
+      return false;
     },
     signButtonText: function () {
       const a = this.action

@@ -31,7 +31,7 @@ export function toDisplayPrice(price, baseDecimals, quoteDecimals, isInverted = 
   return isInverted ? 1 / scaled : scaled
 }
 
-export function lpBaseTokens(pos, pool, percent=100, human=false) {
+export function lpBaseTokens(pos, pool, percent = 100, human = false) {
   const liq = parseInt(pos.qty) / 100 * percent
   let baseQty = 0
   if (pos.positionType == 'concentrated') {
@@ -45,7 +45,7 @@ export function lpBaseTokens(pos, pool, percent=100, human=false) {
     return baseQty
 }
 
-export function lpQuoteTokens(pos, pool, percent=100, human=false) {
+export function lpQuoteTokens(pos, pool, percent = 100, human = false) {
   const liq = parseInt(pos.qty) / 100 * percent
   let quoteQty = 0
   if (pos.positionType == 'concentrated') {
@@ -69,8 +69,8 @@ export function poolKey(position) {
 export function dump(o) {
   return JSON.stringify(o, (key, value) =>
     typeof value === 'bigint'
-	? value.toString()
-	: value
+      ? value.toString()
+      : value
   );
 }
 
@@ -123,5 +123,47 @@ export function concPosSlot(owner, base, quote,
     [posKey, CONC_POS_SLOT]))
 }
 
-const AMBIENT_POS_SLOT = 65550
-const CONC_POS_SLOT = 65549
+export function genSimilarPositions(pos) {
+  const positions = { p0: pos };
+  const p1 = { ...pos };
+  p1.askTick -= 1;
+  positions.p1 = p1;
+  const p2 = { ...pos };
+  p2.askTick += 1;
+  positions.p2 = p2;
+  const p3 = { ...pos };
+  p3.bidTick -= 1;
+  positions.p3 = p3;
+  const p4 = { ...pos };
+  p4.bidTick += 1;
+  positions.p4 = p4;
+  const p5 = { ...pos };
+  p5.bidTick -= 1;
+  p5.askTick -= 1;
+  positions.p5 = p5;
+  const p6 = { ...pos };
+  p6.bidTick += 1;
+  p6.askTick += 1;
+  positions.p6 = p6;
+  const p7 = { ...pos };
+  p7.bidTick -= 1;
+  p7.askTick += 1;
+  positions.p7 = p7;
+  const p8 = { ...pos };
+  p8.bidTick += 1;
+  p8.askTick -= 1;
+  positions.p8 = p8;
+
+  // make a version of each position with negative bid/ask ticks
+  for (let i = 0; i < 9; i++) {
+    const p = { ...positions[`p${i}`] };
+    const tmpBidTick = p.bidTick;
+    p.bidTick = -p.askTick;
+    p.askTick = -tmpBidTick;
+    positions[`p${i + 9}`] = p;
+  }
+  return positions;
+}
+
+const AMBIENT_POS_SLOT = 65550;
+const CONC_POS_SLOT = 65549;
