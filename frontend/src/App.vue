@@ -49,7 +49,7 @@
               <b-avatar size="sm" v-if="this.ensAvatar" :src="this.ensAvatar"></b-avatar>
               <span style="overflow: hidden; text-overflow: ellipsis;">
                 {{ this.ensName ? this.ensName :
-                  shortHash(this.address) }}</span>
+            shortHash(this.address) }}</span>
             </b-button>
           </div>
           <div v-if="chainError" class="text-danger" style="margin-top: 0.5rem">
@@ -68,20 +68,20 @@
             <div v-if="status === null" class="text-center animated-underline">
               Waiting for
               <a :href="txLink(hash)" target="_blank">{{
-                shortHash(hash)
-              }}</a>
+            shortHash(hash)
+          }}</a>
             </div>
             <span v-else-if="status === true" class="text-center text-success" style="padding-bottom: 0.5em;">
               Transaction confirmed
               <a :href="txLink(hash)" target="_blank">{{
-                shortHash(hash)
-              }}</a>
+            shortHash(hash)
+          }}</a>
             </span>
             <div v-else-if="status === false" class="text-center text-danger" style="padding-bottom: 0.5em;">
               Transaction failed
               <a :href="txLink(hash)" target="_blank">{{
-                shortHash(hash)
-              }}</a>
+            shortHash(hash)
+          }}</a>
             </div>
             <a href="#" style="width: 1rem; padding-bottom: 0.5rem; color: inherit;"
               @click.prevent="removeWaitingHash(hash)">
@@ -100,8 +100,8 @@
         <ActionInput class="main-panel border shadow-sm rounded" style="height: auto; width: inherit" ref="actionInput"
           @perform="performAction" @fetchToken="a => fetchTokenInfo(a, true)"
           @fetchWalletBalance="a => fetchWalletBalance(a)" @approve="sendApproveTx"
-          @fetchPool="pos => fetchMissingPool(pos, true)" @parseTx="parseTx" :fetchSwapOutput="fetchSwapOutput" :pools="pools"
-          :tokens="TOKENS[chainId]" :coldTokens="COLD_TOKENS[chainId]" :surpluses="surpluses"
+          @fetchPool="pos => fetchMissingPool(pos, true)" @parseTx="parseTx" :fetchSwapOutput="fetchSwapOutput"
+          :pools="pools" :tokens="TOKENS[chainId]" :coldTokens="COLD_TOKENS[chainId]" :surpluses="surpluses"
           :walletBalances="walletBalances" :allowances="allowances" :parsedTxs="parsedTxs" :address="address"
           :signing="signing" :canSign="canSign" :crocChain="CHAINS[chainId]" />
       </div>
@@ -149,7 +149,8 @@
               <small class="form-text text-muted text-center mb-2">Will be deducted from your exchange balance (or the
                 command size will be reduced to ensure you have enough left)</small>
             </b-form-group>
-            <div id="attached-tip" v-if="scmd._action.tip.amount" style="display: flex; align-items: center; gap: 0.5rem">
+            <div id="attached-tip" v-if="scmd._action.tip.amount"
+              style="display: flex; align-items: center; gap: 0.5rem">
               <span style="height: fit-content">Attached tip: {{ this.tipAmountHuman(scmd._action.tip) }}</span>
               <b-button @click=removeTip(scmd) variant="light"><b-icon-trash /></b-button>
             </div>
@@ -161,12 +162,13 @@
               </b-form-checkbox>
               <b-icon-question-circle id="relayManuallyQuestion" style="margin: 0.3rem 0 0 0.3rem" />
               <b-tooltip target="relayManuallyQuestion" triggers="hover">
-                Send the TX from the connected address.<br /> You can connect any address right now, as long as it has ETH
+                Send the TX from the connected address.<br /> You can connect any address right now, as long as it has
+                ETH
                 for gas.
               </b-tooltip>
             </div>
-            <b-button ref="relayButton" :variant="relaying ? 'outline-success' : 'success'" size="lg" style="width: 100%"
-              type=submit :disabled="relayButtonDisabled(scmd)">
+            <b-button ref="relayButton" :variant="relaying ? 'outline-success' : 'success'" size="lg"
+              style="width: 100%" type=submit :disabled="relayButtonDisabled(scmd)">
               <div v-if="relaying" class="load-spinner spinner-border spinner-border-md" role="status">
                 <span class="sr-only">{{ scmd._action._relayManually ? 'Sending...' : 'Relaying...' }}</span>
               </div>
@@ -283,7 +285,104 @@ export const blastSepolia = defineChain({
   testnet: true,
 })
 
-const chains = [mainnet, blast, scroll, canto, sepolia, blastSepolia, scrollSepolia, goerli ]
+export const swellchain = defineChain({
+  id: 1923,
+  name: 'Swellchain',
+  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  rpcUrls: {
+    public: {
+      http: [
+        'https://swell-mainnet.alt.technology',
+        'https://rpc.ankr.com/swell',
+      ],
+    },
+    default: {
+      http: [
+        'https://swell-mainnet.alt.technology',
+        'https://rpc.ankr.com/swell',
+      ],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Swell Explorer',
+      url: 'https://explorer.swellnetwork.io',
+      apiUrl: 'https://explorer.swellnetwork.io/api',
+    },
+  },
+  contracts: {
+    multicall3: {
+      address: '0xcA11bde05977b3631167028862bE2a173976CA11',
+      blockCreated: 1,
+    },
+  },
+})
+
+export const plume = defineChain({
+  id: 98_865,
+  name: 'Plume Mainnet',
+  nativeCurrency: {
+    name: 'Plume Ether',
+    symbol: 'ETH',
+    decimals: 18,
+  },
+  rpcUrls: {
+    public: {
+      http: ['https://rpc.plumenetwork.xyz'],
+      webSocket: ['wss://rpc.plumenetwork.xyz'],
+    },
+    default: {
+      http: ['https://rpc.plumenetwork.xyz'],
+      webSocket: ['wss://rpc.plumenetwork.xyz'],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Blockscout',
+      url: 'https://explorer.plumenetwork.xyz',
+      apiUrl: 'https://explorer.plumenetwork.xyz/api',
+    },
+  },
+  contracts: {
+    multicall3: {
+      address: '0xca11bde05977b3631167028862be2a173976ca11',
+      blockCreated: 48_577,
+    },
+  },
+})
+
+export const monadTestnet = defineChain({
+  id: 10_143,
+  name: 'Monad Testnet',
+  nativeCurrency: {
+    name: 'Testnet MON',
+    symbol: 'MON',
+    decimals: 18,
+  },
+  rpcUrls: {
+    public: {
+      http: ['https://testnet-rpc.monad.xyz'],
+    },
+    default: {
+      http: ['https://testnet-rpc.monad.xyz'],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Monad Testnet explorer',
+      url: 'https://testnet.monadexplorer.com',
+    },
+  },
+  contracts: {
+    multicall3: {
+      address: '0xcA11bde05977b3631167028862bE2a173976CA11',
+      blockCreated: 251449,
+    },
+  },
+  testnet: true,
+})
+
+const chains = [mainnet, blast, scroll, monadTestnet, swellchain, plume, canto, sepolia, blastSepolia, scrollSepolia, goerli]
 const projectId = '8978c906351c8a4e3eccd85a700306ab'
 
 const wagmiConfig = defaultWagmiConfig({
@@ -300,8 +399,11 @@ const wagmiConfig = defaultWagmiConfig({
 
 import chain1 from './assets/chains/1.webp'
 import chain5 from './assets/chains/5.webp'
+import chain1923 from './assets/chains/1923.png'
 import chain7700 from './assets/chains/7700.webp'
+import chain10143 from './assets/chains/10143.png'
 import chain81457 from './assets/chains/81457.webp'
+import chain98865 from './assets/chains/98865.jpg'
 import chain42161 from './assets/chains/42161.webp'
 import chain421613 from './assets/chains/421613.webp'
 import chain534351 from './assets/chains/534351.webp'
@@ -312,8 +414,11 @@ import chain168587773 from './assets/chains/168587773.webp'
 const chainImages = {
   1: chain1,
   5: chain5,
+  1923: chain1923,
   7700: chain7700,
+  10143: chain10143,
   81457: chain81457,
+  98865: chain98865,
   42161: chain42161,
   421613: chain421613,
   534351: chain534351,
@@ -721,9 +826,9 @@ export default {
       // const cmd1 = this.buildMintLimitCmd(action1)
       // const action2 = { base: "0x0000000000000000000000000000000000000000", quote: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", poolIdx: 420n, lowTick: 0x2eea0, highTick: 0x2eea4, isBid: true, _qtyRaw: 4000000000000n, settleFlags: 4 }
       // const cmd2 = this.buildMintLimitCmd(action2)
-      const action1 = {base: "0x0000000000000000000000000000000000000000", quote: "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4", poolIdx: 420n, lowTick: 0x30e74, highTick: 0x30e78, isBid: false, _qtyRaw: 1000000n, settleFlags: 0}
+      const action1 = { base: "0x0000000000000000000000000000000000000000", quote: "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4", poolIdx: 420n, lowTick: 0x30e74, highTick: 0x30e78, isBid: false, _qtyRaw: 1000000n, settleFlags: 0 }
       const cmd1 = this.buildMintLimitCmd(action1)
-      const action2 = {base: "0x0000000000000000000000000000000000000000", quote: "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4", poolIdx: 420n, lowTick: 0x31e74, highTick: 0x31e78, isBid: false, _qtyRaw: 1000000n, settleFlags: 0}
+      const action2 = { base: "0x0000000000000000000000000000000000000000", quote: "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4", poolIdx: 420n, lowTick: 0x31e74, highTick: 0x31e78, isBid: false, _qtyRaw: 1000000n, settleFlags: 0 }
       const cmd2 = this.buildMintLimitCmd(action2)
       await this.sendMultiUserCmd([cmd1, cmd2])
       return cmd2
@@ -793,7 +898,7 @@ export default {
       )
       return { callpath, cmd, _action: action }
     },
-    signCmd: async function (cmd, noTips=false) {
+    signCmd: async function (cmd, noTips = false) {
       console.log('signCmd', cmd)
       try {
         const nonce = 0
@@ -1429,8 +1534,9 @@ export default {
           return { functionName: "queryAmbientTokens", args: [pos.user, pos.base, pos.quote, pos.poolIdx], ...qContract }
       })
       const reads = await client.multicall({ contracts: calls })
-      console.log('fetchPositionsLiq query', positions)
-      console.log('fetchPositionsLiq result', reads)
+      console.log('fetchPositionsLiq positions', Object.keys(positions).length, positions)
+      console.log('fetchPositionsLiq calls', calls.length, calls)
+      console.log('fetchPositionsLiq reads', reads.length, reads)
       for (const i in posIds) {
         const posId = posIds[i]
         const read = reads[i]
@@ -1490,9 +1596,9 @@ export default {
         this.$set(this.pools, poolId, pool)
       }
     },
-    fetchMissingPool: async function (inPos, setRemoveAction=false) {
+    fetchMissingPool: async function (inPos, setRemoveAction = false) {
       console.log('inPos', inPos)
-      await this.fetchPools({p: inPos})
+      await this.fetchPools({ p: inPos })
       if (!inPos.user)
         inPos.user = this.address
       if (inPos.positionType == 'concentrated' && (inPos.bidTick === null || inPos.askTick === null))
@@ -1762,6 +1868,12 @@ export default {
         chainId = blastSepolia.id
       else if (origInput.indexOf('blastscan.io') != -1)
         chainId = blast.id
+      else if (origInput.indexOf('explorer.swellnetwork.io') != -1)
+        chainId = swellchain.id
+      else if (origInput.indexOf('explorer.plumenetwork.xyz') != -1)
+        chainId = plume.id
+      else if (origInput.indexOf('testnet.monadexplorer.com') != -1)
+        chainId = monadTestnet.id
       result.chainId = chainId
 
       if (txInput.length == 66) {
@@ -1799,23 +1911,25 @@ export default {
           result.description = await this.describeSwap(args, chainId)
         } else if (functionName == 'userCmd' || functionName == 'userCmdRelayer') {
           const { description, position, surplus } = await this.describeUserCmd(args[0], args[1], sender, chainId)
-          position.chainId = chainId
-          console.log(description, position, surplus)
-          result.description = description
-          result.position = position
-          result.surplus = surplus
-          if (position.base) {
-            try {
-              await this.fetchMissingPool(position, false)
-            } catch (e) {
-              console.log('fetch parsed position failed', e)
+          if (position || surplus) {
+            position.chainId = chainId
+            console.log(description, position, surplus)
+            result.description = description
+            result.position = position
+            result.surplus = surplus
+            if (position.base) {
+              try {
+                await this.fetchMissingPool(position, false)
+              } catch (e) {
+                console.log('fetch parsed position failed', e)
+              }
             }
-          }
-          if (surplus.token && this.address && sender == this.address) {
-            try {
-              await this.fetchSurpluses(sender, [surplus.token])
-            } catch (e) {
-              console.log('fetch parsed surplus failed', e)
+            if (surplus.token && this.address && sender == this.address) {
+              try {
+                await this.fetchSurpluses(sender, [surplus.token])
+              } catch (e) {
+                console.log('fetch parsed surplus failed', e)
+              }
             }
           }
         } else {
@@ -1850,7 +1964,22 @@ export default {
       let description = ""
       let position = { base: null, quote: null, bidTick: null, askTick: null, poolIdx: null, user: sender }
       let surplus = { token: null }
-      if (callpath == CROC_CHAINS[chainId].proxyPaths.liq) {
+      if (callpath == 1) {
+        const args = decodeAbiParameters([
+          { name: 'base', type: 'address' },
+          { name: 'quote', type: 'address' },
+          { name: 'poolIdx', type: 'uint256' },
+          { name: 'bidTick', type: 'int24' },
+          { name: 'askTick', type: 'int24' },
+          { name: 'qty', type: 'uint128' },
+          { name: 'limitLower', type: 'uint128' },
+          { name: 'limitHigher', type: 'uint128' },
+          { name: 'settleFlags', type: 'uint8' },
+          { name: 'lpConduit', type: 'address' }
+        ], cmd)
+        console.log(args)
+        description = await this.describeSwap(args, chainId)
+      } else if (callpath == CROC_CHAINS[chainId].proxyPaths.liq) {
         const args = decodeAbiParameters([
           { name: 'code', type: 'uint8' },
           { name: 'base', type: 'address' },
@@ -2108,7 +2237,7 @@ export default {
         return
       }
       const client = getPublicClient()
-      const ensClient = getPublicClient({chainId: '0x1'})
+      const ensClient = getPublicClient({ chainId: '0x1' })
       let [ensName, balance] = await Promise.allSettled([ensClient.getEnsName({ address: this.address }), client.getBalance({ address: this.address })]);
 
       let symbol = this.chain.chain.nativeCurrency.symbol

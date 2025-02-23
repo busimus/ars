@@ -173,12 +173,78 @@ const BLAST_SEPOLIA_CHAIN = {
   displayName: "Blast Sepolia",
 };
 
+const SWELL_CHAIN = {
+  nodeUrl: "https://swell-mainnet.alt.technology",
+  addrs: {
+    dex: "0xaAAaAaaa82812F0a1f274016514ba2cA933bF24D",
+    query: "0xaab17419F062bB28CdBE82f9FC05E7C47C3F6194",
+    impact: "0xd83eF4d0e968A96329aC297bBf049CDdaC7E0362",
+  },
+  poolIndex: 420,
+  isTestNet: false,
+  chainId: "0x783",
+  gridSize: 4,
+  proxyPaths: {
+    cold: 3,
+    long: 130,
+    liq: 128
+  },
+  blockExplorer: "https://explorer.swellnetwork.io/",
+  displayName: "Swell",
+};
+
+const PLUME_CHAIN = {
+  nodeUrl: "https://rpc.plumenetwork.xyz",
+  addrs: {
+    dex: "0xAaAaAAAA81a99d2a05eE428eC7a1d8A3C2237D85",
+    query: "0xA3BD3bE19012De72190c885FB270beb93e36a8A7",
+    impact: "0x6A699AB45ADce02891E6115b81Dfb46CAa5efDb9",
+  },
+  poolIndex: 420,
+  isTestNet: false,
+  chainId: "0x18231",
+  gridSize: 4,
+  proxyPaths: {
+    cold: 3,
+    long: 130,
+    liq: 128
+  },
+  blockExplorer: "https://explorer.plumenetwork.xyz/",
+  displayName: "Plume",
+};
+
+const MONAD_TESTNET_CHAIN = {
+  nodeUrl: "https://testnet-rpc.monad.xyz",
+  addrs: {
+    dex: "0x88B96aF200c8a9c35442C8AC6cd3D22695AaE4F0",
+    query: "0x1C74Dd2DF010657510715244DA10ba19D1F3D2B7",
+    impact: "0x70a6a0C905af5737aD73Ceba4e6158e995031d4B",
+    router: "0x3108E20b0Da8b267DaA13f538964940C6eBaCCB2",
+    routerBypass: "0x8415bFC3b1ff76B804Ab8a6810a1810f9df32483",
+  },
+  poolIndex: 36000,
+  isTestNet: true,
+  chainId: "0x279f",
+  gridSize: 1,
+  proxyPaths: {
+    cold: 3,
+    long: 130,
+    liq: 128,
+    dfltColdSwap: true
+  },
+  blockExplorer: "https://testnet.monadexplorer.com/",
+  displayName: "Monad Testnet",
+};
+
 export const CROC_CHAINS = {
   1: MAINNET_CHAIN,
   5: GOERLI_CHAIN,
-  81457: BLAST_CHAIN,
+  1923: SWELL_CHAIN,
   7700: CANTO_CHAIN,
+  10143: MONAD_TESTNET_CHAIN,
   42161: ARB_CHAIN,
+  81457: BLAST_CHAIN,
+  98865: PLUME_CHAIN,
   421613: ARB_GOERLI_CHAIN,
   534351: SCROLL_SEPOLIA_CHAIN,
   534352: SCROLL_CHAIN,

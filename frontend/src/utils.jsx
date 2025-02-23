@@ -95,6 +95,12 @@ export function getSomeTokenForChain(chainId) {
     return "0x4d65fb724ced0cfc6abfd03231c9cdc2c36a587b"
   else if (chainId == 534352)
     return "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4"
+  else if (chainId == 1923)
+    return "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34"
+  else if (chainId == 98865)
+    return "0x3938a812c54304feffd266c7e2e70b48f9475ad6"
+  else if (chainId == 10143)
+    return "0xf817257fed379853cde0fa4f97ab987181b1e5ea"
   else
     throw "chain not supported"
 }
